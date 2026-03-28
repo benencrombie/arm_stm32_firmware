@@ -247,21 +247,21 @@ void PWM_SetArr(e_MotorNum motor_number, uint32_t arr_val)
 
     switch (motor_number)
     {
-    case MOTOR0:
+    case M0:
         TIM2->ARR = clipped_arr;
-    case MOTOR1:
+    case M1:
         TIM3->ARR = clipped_arr;
-    case MOTOR2:
+    case M2:
         TIM4->ARR = clipped_arr;
-    case MOTOR3:
+    case M3:
         TIM5->ARR = clipped_arr;
         // NOTE motors 4 and 5 re-use timers 2 and 3 respectively. Will need to be careful that
         // these can't change speeds individually at the same time. Motor 0 is tied to motor 4,
         // motor 1 is tied to motor 5 in terms of speed. With the mechanical config of the robot
         // arm, these motors won't have to move at the same time with natural movements.
-    case MOTOR4:
+    case M4:
         TIM2->ARR = clipped_arr;
-    case MOTOR5:
+    case M5:
         TIM3->ARR = clipped_arr;
     }
 }
