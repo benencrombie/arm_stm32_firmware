@@ -1,7 +1,6 @@
 #include "main.h"
 #include "GPIO.h"
 #include "SysTick.h"
-// #include "stm32f4xx.h"
 #include "stm32f446xx.h"
 
 // defines
