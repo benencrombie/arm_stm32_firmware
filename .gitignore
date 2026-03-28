@@ -1,0 +1,24 @@
+# Build directories
+Debug/
+Release/
+build/
+
+# Compiled objects
+*.o
+*.d
+
+# Binaries
+*.elf
+*.bin
+*.hex
+
+# Debug / map files
+*.map
+*.lst
+
+# Eclipse / CubeIDE temp files
+*.launch
+
+# OS junk
+.DS_Store
+Thumbs.db
