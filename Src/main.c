@@ -14,6 +14,9 @@ static void SystemClock_Config_84MHz(void);
 // activities as system speed (84 MHz) and milliseconds (1000 Hz)
 uint32_t ms_counter = 0;
 
+/**
+ * @brief main. does things.
+ */
 int main(void)
 {
     // Update system clock with CMSIS function

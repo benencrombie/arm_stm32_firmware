@@ -4,10 +4,17 @@ filename: PWM.c
 PWM driver
 */
 
+#include "PWM.h"
+#include "MotorDriver.h"
 #include "main.h"
 
 // GPIOA/B/C clocks are already enabled
 
+/**
+ * @brief init timer 2 for pwm
+ * @param void
+ * @return void
+ */
 static void PWM_Init_TIM2(void)
 {
     // PWMs used here
@@ -24,23 +31,37 @@ static void PWM_Init_TIM2(void)
     // affect
 
     // Set PSC, prescaling
-    TIM2->PSC = 16000;
+    TIM2->PSC = TIM2_PRESC;
 
     // Set ARR, auto reload register
     TIM2->ARR = 1000;
 
-    // Configure PWM on applicable channels (CH2)
-    TIM2->CCMR1 &= ~(0xFF << 8); // clear CH2
-    TIM2->CCMR1 |= (6 << 12);    // PWM mode 1
-    TIM2->CCMR1 |= (1 << 11);    // enable preload
+    // Configure PWM on ch2. CCMR1 contains ch1 and ch2
+    // Ch1 is bits 15:8 of this register
+    TIM2->CCMR1 &= ~(0xFF << 8); // clear ch2
+    TIM2->CCMR1 |= (0x06 << 12); // PWM mode 1
+    TIM2->CCMR1 |= (0x01 << 11); // enable preload
 
-    // Set duty cycle
-    TIM2->CCR2 = 500;
+    // Configure PWM on ch3. CCMR2 contains ch3 and ch4
+    // Ch3 is its 7:0 of this register
+    TIM2->CCMR2 &= ~(0xFF << 0); // clear ch3
+    TIM2->CCMR2 |= (0x06 << 4);  // PWM mode 1
+    TIM2->CCMR2 |= (0x01 << 3);  // output compare preload
 
-    // Enable CH2 output
+    // Set duty cycle for ch2
+    TIM2->CCR2 = 500; // Defaulting. this will be changed when starting a pwm
+
+    // Set the duty cycle for ch3
+    TIM2->CCR3 = 500; // Defaulting. this will be changed when starting a pwm
+
+    // Enable channel 2 output (PA1, motor 0)
     TIM2->CCER |= TIM_CCER_CC2E;
 
+    // Enable channel 3 output (PA2, motor 4)
+    TIM2->CCER |= TIM_CCER_CC3E;
+
     // Enable preload. This allows speed to be adjusted mid cycle smoothly
+    // Added this in and speed transitions are a lot cleaner
     TIM2->CR1 |= TIM_CR1_ARPE;
 
     // Load up new config in the registers
@@ -50,22 +71,197 @@ static void PWM_Init_TIM2(void)
     TIM2->CR1 |= TIM_CR1_CEN;
 }
 
+/**
+ * @brief init timer 3 for pwm
+ * @param void
+ * @return void
+ */
 static void PWM_Init_TIM3(void)
 {
+    // PWMs used here
+    // PA6 on channel 1, for MTR1 step
+    // PA7 on channel 2, for MTR5 step
+
+    // Enable TIM3 clock
+    RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;
+
+    // Set PSC, prescaling
+    TIM3->PSC = TIM3_PRESC;
+
+    // Set ARR, auto reload register
+    TIM3->ARR = 1000;
+
+    // Configure PWM on ch1. Bits 7:0
+    TIM3->CCMR1 &= ~(0xFF << 0); // clear ch1
+    TIM3->CCMR1 |= (0x06 << 4);  // PWM mode 1
+    TIM3->CCMR1 |= (0x01 << 3);  // output compare preload
+
+    // Configure PWM on ch2. Bits 15:8 of same register
+    TIM3->CCMR1 &= ~(0xFF << 8); // clear ch2
+    TIM3->CCMR1 |= (0x06 << 12); // PWM mode 1
+    TIM3->CCMR1 |= (0x01 << 11); // output compare preload
+
+    // Set duty cycle for ch1
+    TIM3->CCR1 = 500;
+
+    // Set duty cycle for ch2
+    TIM3->CCR2 = 500;
+
+    // Enable channel 1 output (PA6, motor 1)
+    TIM3->CCER |= TIM_CCER_CC1E;
+
+    // Enable channel 2 output (PA7, motor 5)
+    TIM3->CCER |= TIM_CCER_CC2E;
+
+    // Enable ARR preload
+    TIM3->CR1 |= TIM_CR1_ARPE;
+
+    // Load up new config in the registers
+    TIM3->EGR |= TIM_EGR_UG;
+
+    // Start the timer
+    TIM3->CR1 |= TIM_CR1_CEN;
 }
 
+/**
+ * @brief init timer 4 for pwm
+ * @param void
+ * @return void
+ */
 static void PWM_Init_TIM4(void)
 {
+    // PWMs used here
+    // Just PB6 on channel 1, for MTR2 step
+
+    // Enable TIM4 clock
+    RCC->APB1ENR |= RCC_APB1ENR_TIM4EN;
+
+    // Set PSC, prescaling
+    TIM4->PSC = TIM4_PRESC;
+
+    // Set ARR, auto reload register
+    TIM4->ARR = 1000;
+
+    // Configure PWM on ch1. Bits 7:0
+    TIM4->CCMR1 &= ~(0xFF << 0); // clear ch1
+    TIM4->CCMR1 |= (0x06 << 4);  // PWM mode 1
+    TIM4->CCMR1 |= (0x01 << 3);  // output compare preload
+
+    // Set duty cycle for ch1
+    TIM4->CCR1 = 500;
+
+    // Enable channel 1 output (PB6, motor 2)
+    TIM4->CCER |= TIM_CCER_CC1E;
+
+    // Enable ARR preload
+    TIM4->CR1 |= TIM_CR1_ARPE;
+
+    // Load up new config in the registers
+    TIM4->EGR |= TIM_EGR_UG;
+
+    // Start the timer
+    TIM4->CR1 |= TIM_CR1_CEN;
 }
 
+/**
+ * @brief init timer 5 for pwm
+ * @param void
+ * @return void
+ */
 static void PWM_Init_TIM5(void)
 {
+    // PWMs used here
+    // Just PA0 on channel 1, for MTR3 step
+
+    // Enable TIM2 clock
+    RCC->APB1ENR |= RCC_APB1ENR_TIM4EN;
+
+    // Set PSC, prescaling
+    TIM5->PSC = TIM5_PRESC;
+
+    // Set ARR, auto reload register
+    TIM5->ARR = 1000;
+
+    // Configure PWM on ch1. Bits 7:0
+    TIM5->CCMR1 &= ~(0xFF << 0); // clear ch1
+    TIM5->CCMR1 |= (0x06 << 4);  // PWM mode 1
+    TIM5->CCMR1 |= (0x01 << 3);  // output compare preload
+    // Set duty cycle for ch1
+    TIM5->CCR1 = 500;
+
+    // Enable channel 1 output (PB6, motor 2)
+    TIM5->CCER |= TIM_CCER_CC1E;
+
+    // Enable ARR preload
+    TIM5->CR1 |= TIM_CR1_ARPE;
+
+    // Load up new config in the registers
+    TIM5->EGR |= TIM_EGR_UG;
+
+    // Start the timer
+    TIM5->CR1 |= TIM_CR1_CEN;
 }
 
+/**
+ * @brief Initializes all relevant PWM timers (general purpose timers)
+ * @param void
+ * @return void
+ */
 void PWM_Initialize(void)
 {
     PWM_Init_TIM2();
     PWM_Init_TIM3();
     PWM_Init_TIM4();
     PWM_Init_TIM5();
+}
+
+/**
+ * @brief sets the speed of a pwm by setting the auto reload register (ARR) value
+ * @param motor_number the motor selected to adjust speed for
+ * @param arr_val the updated arr value
+ * @return void
+ */
+void PWM_SetArr(e_MotorNum motor_number, uint32_t arr_val)
+{
+    // This is a little ugly, but I couldn't wrap my head around how to do this in a simple way
+    // without just using motor numbers. Makes this file a little less generalized, but it's fine.
+    // The alternative is to just use specific timer/channels as inputs but that's probbaly messier
+
+    uint32_t clipped_arr;
+
+    // TIM2 and TIM5 take 32 bits for no good reason. Clip this to 16b to be general across all four
+    // timers. Clip upper arr to prevent overflow
+    if (arr_val > MAX_ARR)
+    {
+        clipped_arr = MAX_ARR;
+    }
+    // Clip lower to prevent motor from going too fast.
+    else if (arr_val < MIN_ARR)
+    {
+        clipped_arr = MIN_ARR;
+    }
+    else
+    {
+        clipped_arr = arr_val;
+    }
+
+    switch (motor_number)
+    {
+    case MOTOR0:
+        TIM2->ARR = clipped_arr;
+    case MOTOR1:
+        TIM3->ARR = clipped_arr;
+    case MOTOR2:
+        TIM4->ARR = clipped_arr;
+    case MOTOR3:
+        TIM5->ARR = clipped_arr;
+        // NOTE motors 4 and 5 re-use timers 2 and 3 respectively. Will need to be careful that
+        // these can't change speeds individually at the same time. Motor 0 is tied to motor 4,
+        // motor 1 is tied to motor 5 in terms of speed. With the mechanical config of the robot
+        // arm, these motors won't have to move at the same time with natural movements.
+    case MOTOR4:
+        TIM2->ARR = clipped_arr;
+    case MOTOR5:
+        TIM3->ARR = clipped_arr;
+    }
 }
