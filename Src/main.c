@@ -9,7 +9,9 @@
 // prototypes
 static void SystemClock_Config_84MHz(void);
 
-//
+// Initialize ms to the next second, or however frequently we want to do stuff. Highest frequency
+// activities as system speed (84 MHz) and milliseconds (1000 Hz)
+uint32_t ms_counter = 0;
 
 int main(void)
 {
@@ -30,8 +32,18 @@ int main(void)
             // Unflip the flag
             f_ms = 0;
 
-            // Toggle test pin
-            GPIO_ToggleTestPin();
+            // Increment ms counter
+            ms_counter++;
+
+            // Every 1 second (1000 ms)
+            if (ms_counter == 1000)
+            {
+                // Reset counter
+                ms_counter = 0;
+
+                // Toggle test pin
+                GPIO_ToggleTestPin();
+            }
         }
 
         // 84 MHz loop

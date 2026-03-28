@@ -21,7 +21,7 @@ void SystemCoreClockUpdate(void);
  */
 
 #define TEST_GPIO_PORT GPIOC
-#define TEST_GPIO_PIN  0
+#define TEST_GPIO_PIN  3 // PC3
 
 /**
  * Motor IOs:

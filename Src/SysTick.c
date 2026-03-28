@@ -16,13 +16,14 @@ priority.
 
 #define MS_TICKS (SystemCoreClock / 1000) // 84000 Ticks/ms
 
-uint8_t f_ms = 0;
+// flag for ms
+volatile uint32_t f_ms = 0;
 
 void SysTick_Initialize(void)
 {
     // SysTick is the hardware countdown timer insite Cortex-M4
     // Load is reload value register, countdown from 84k continuously, then a flag is put up
-    SysTick->LOAD = (uint16_t)MS_TICKS - 1;
+    SysTick->LOAD = MS_TICKS - 1;
 
     // Current value register, set current val to 0 on init
     SysTick->VAL = 0;
