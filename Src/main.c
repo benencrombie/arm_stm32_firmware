@@ -1,5 +1,6 @@
 #include "main.h"
 #include "GPIO.h"
+#include "PWM.h"
 #include "SysTick.h"
 #include "stm32f446xx.h"
 
@@ -24,6 +25,9 @@ int main(void)
     // Initialize all pins
     GPIO_Initialize();
 
+    // Initialize PWMs on timers
+    PWM_Initialize();
+
     while (1)
     {
         // Millisecond loop - 1000 Hz
@@ -41,8 +45,12 @@ int main(void)
                 // Reset counter
                 ms_counter = 0;
 
-                // Toggle test pin
+                // Debug testing block
+#if DEBUG
+                // Toggle test pin - hooked up to LED, easily shows that CPU is not hanging
                 GPIO_ToggleTestPin();
+
+#endif
             }
         }
 
