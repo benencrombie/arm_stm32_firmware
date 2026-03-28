@@ -1,0 +1,19 @@
+{
+    // Source: ChatGPT
+    // Tell VS Code to use clang-format for C/C++ files
+    "C_Cpp.clang_format_style": "file",
+    "C_Cpp.formatting": "clangFormat",
+    // Use Microsoft C/C++ extension as the default formatter
+    "[c]": {
+        "editor.defaultFormatter": "ms-vscode.cpptools"
+    },
+    "[cpp]": {
+        "editor.defaultFormatter": "ms-vscode.cpptools"
+    },
+    // Auto-format files on save
+    "editor.formatOnSave": true,
+    // Optional: include paths for IntelliSense (helps STM32 headers)
+    "C_Cpp.default.includePath": [
+        "${workspaceFolder}/Core/Inc",
+    ]
+}
