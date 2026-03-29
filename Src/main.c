@@ -54,6 +54,9 @@ int main(void)
                 // Reset counter
                 ms_counter = 0;
 
+                // Update motors
+                Motors_FSM_Tick();
+
                 // Debug testing block, every 1 second
 #if DEBUG
                 // Toggle test pin - hooked up to LED, easily shows that CPU is not hanging

@@ -1,5 +1,6 @@
 /*
 filename: PWM.c
+author: Benen Crombie
 
 PWM driver
 */
@@ -55,10 +56,10 @@ static void PWM_Init_TIM2(void)
     TIM2->CCR3 = 500; // Defaulting. this will be changed when starting a pwm
 
     // Enable channel 2 output (PA1, motor 0)
-    TIM2->CCER |= TIM_CCER_CC2E;
+    // TIM2->CCER |= TIM_CCER_CC2E;
 
     // Enable channel 3 output (PA2, motor 4)
-    TIM2->CCER |= TIM_CCER_CC3E;
+    // TIM2->CCER |= TIM_CCER_CC3E;
 
     // Enable preload. This allows speed to be adjusted mid cycle smoothly
     // Added this in and speed transitions are a lot cleaner
@@ -108,10 +109,10 @@ static void PWM_Init_TIM3(void)
     TIM3->CCR2 = 500;
 
     // Enable channel 1 output (PA6, motor 1)
-    TIM3->CCER |= TIM_CCER_CC1E;
+    // TIM3->CCER |= TIM_CCER_CC1E;
 
     // Enable channel 2 output (PA7, motor 5)
-    TIM3->CCER |= TIM_CCER_CC2E;
+    // TIM3->CCER |= TIM_CCER_CC2E;
 
     // Enable ARR preload
     TIM3->CR1 |= TIM_CR1_ARPE;
@@ -151,7 +152,7 @@ static void PWM_Init_TIM4(void)
     TIM4->CCR1 = 500;
 
     // Enable channel 1 output (PB6, motor 2)
-    TIM4->CCER |= TIM_CCER_CC1E;
+    // TIM4->CCER |= TIM_CCER_CC1E;
 
     // Enable ARR preload
     TIM4->CR1 |= TIM_CR1_ARPE;
@@ -186,11 +187,12 @@ static void PWM_Init_TIM5(void)
     TIM5->CCMR1 &= ~(0xFF << 0); // clear ch1
     TIM5->CCMR1 |= (0x06 << 4);  // PWM mode 1
     TIM5->CCMR1 |= (0x01 << 3);  // output compare preload
+
     // Set duty cycle for ch1
     TIM5->CCR1 = 500;
 
     // Enable channel 1 output (PB6, motor 2)
-    TIM5->CCER |= TIM_CCER_CC1E;
+    // TIM5->CCER |= TIM_CCER_CC1E;
 
     // Enable ARR preload
     TIM5->CR1 |= TIM_CR1_ARPE;
@@ -213,6 +215,66 @@ void PWM_Initialize(void)
     PWM_Init_TIM3();
     PWM_Init_TIM4();
     PWM_Init_TIM5();
+}
+
+/**
+ * @brief enables a channel on a timer
+ * @param void
+ * @return void
+ */
+void PWM_EnableChannel(e_MotorNum motor_number)
+{
+    switch (motor_number)
+    {
+    case M0:
+        TIM2->CCER |= TIM_CCER_CC2E; // enable channel 2
+        break;
+    case M1:
+        TIM3->CCER |= TIM_CCER_CC1E; // enable channel 1
+        break;
+    case M2:
+        TIM4->CCER |= TIM_CCER_CC1E; // enable channel 1
+        break;
+    case M3:
+        TIM5->CCER |= TIM_CCER_CC1E; // enable channel 1
+        break;
+    case M4:
+        TIM2->CCER |= TIM_CCER_CC3E; // enable channel 3
+        break;
+    case M5:
+        TIM3->CCER |= TIM_CCER_CC2E; // enable channel 2
+        break;
+    }
+}
+
+/**
+ * @brief disables a channel on a timer
+ * @param void
+ * @return void
+ */
+void PWM_DisableChannel(e_MotorNum motor_number)
+{
+    switch (motor_number)
+    {
+    case M0:
+        TIM2->CCER &= ~TIM_CCER_CC2E; // disable channel 2
+        break;
+    case M1:
+        TIM3->CCER &= ~TIM_CCER_CC1E; // disable channel 1
+        break;
+    case M2:
+        TIM4->CCER &= ~TIM_CCER_CC1E; // disable channel 1
+        break;
+    case M3:
+        TIM5->CCER &= ~TIM_CCER_CC1E; // disable channel 1
+        break;
+    case M4:
+        TIM2->CCER &= ~TIM_CCER_CC3E; // disable channel 3
+        break;
+    case M5:
+        TIM3->CCER &= ~TIM_CCER_CC2E; // disable channel 2
+        break;
+    }
 }
 
 /**

@@ -22,6 +22,8 @@ Header for PWMs, timers 2,3,4, and 5
          // reductions on the mechanical side
 
 void PWM_Initialize(void);
+void PWM_EnableChannel(e_MotorNum motor_number);
+void PWM_DisableChannel(e_MotorNum motor_number);
 void PWM_SetArr(e_MotorNum motor_number, uint32_t arr_val);
 
 #endif

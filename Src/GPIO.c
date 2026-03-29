@@ -1,6 +1,7 @@
 /*
 filename: GPIO.c
-================
+author: Benen Crombie
+
 Contains initialization and basic functions of GPIOs.
 
 Refer to the document RM0394, Rev 5. References for RM0394 chapters/sections

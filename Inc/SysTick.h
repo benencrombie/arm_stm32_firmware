@@ -1,6 +1,7 @@
 /*
 filename: SysTick.h
-================
+author: Benen Crombie
+
 Header for SysTick.c
 */
 

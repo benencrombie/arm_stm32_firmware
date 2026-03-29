@@ -1,6 +1,7 @@
 /*
 filename: SysTick.c
-================
+author: Benen Crombie
+
 Timekeeper module. Flags for milliseconds
 
 TODO: hard to find documentation on the core_cm4.h registers. Got a lot of help from claude with
