@@ -1,5 +1,6 @@
 #include "main.h"
 #include "GPIO.h"
+#include "MotorDriver.h"
 #include "PWM.h"
 #include "SysTick.h"
 #include "stm32f446xx.h"
@@ -31,6 +32,11 @@ int main(void)
     // Initialize PWMs on timers
     PWM_Initialize();
 
+    // Allow motors to be used
+    Motors_FSM_Initialize(); // TODO maybe this and any other small FSMs should be called within the
+                             // big FSM. Haven't architected what that'll look like just yet, but
+                             // this is good for bringup
+
     while (1)
     {
         // Millisecond loop - 1000 Hz
@@ -48,7 +54,7 @@ int main(void)
                 // Reset counter
                 ms_counter = 0;
 
-                // Debug testing block
+                // Debug testing block, every 1 second
 #if DEBUG
                 // Toggle test pin - hooked up to LED, easily shows that CPU is not hanging
                 GPIO_ToggleTestPin();
