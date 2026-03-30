@@ -91,23 +91,26 @@ typedef enum
 // Enum for motor details. Includes STEP, DIR, EN, etc.
 typedef struct
 {
-    e_MotorNum motor_num;          // motor enum
-    e_MotorState motor_state;      // motor state, enum is above this
-    uint8_t motor_en_pin;          // enable pin
-    uint8_t motor_dir_pin;         // direction pin
-    GPIO_TypeDef *motor_step_port; // step port
-    uint8_t motor_step_pin;        // step pin
-    uint16_t motor_slow_arr;       // slowest arr
-    uint16_t motor_mid_arr;        // mid arr
-    uint16_t motor_fast_arr;       // fastest arr
-    uint16_t motor_ramp_ticks;     // number of 1ms ticks to ramp from 0 to full speed
-    uint8_t motor_ramp_counter;    // ramp counter, proportional to speed (kinda)
+    e_MotorNum motor_num;                 // motor enum
+    e_MotorState motor_state;             // motor state, enum is above this
+    e_MotorState motor_destination_state; // destination state. what speed the motor approaches
+    uint8_t motor_en_pin;                 // enable pin
+    uint8_t motor_dir_pin;                // direction pin
+    GPIO_TypeDef *motor_step_port;        // step port
+    uint8_t motor_step_pin;               // step pin
+    uint32_t motor_current_arr;           // current arr
+    uint16_t motor_slow_arr;              // slowest arr
+    uint16_t motor_mid_arr;               // mid arr
+    uint16_t motor_fast_arr;              // fastest arr
+    uint16_t motor_ramp_ticks;            // number of 1ms ticks to ramp from 0 to full speed
+    uint8_t motor_ramp_counter;           // ramp counter, proportional to speed (kinda)
 } s_MotorStruct;
 
 // Prototypes
 void Motors_RampDownAll(void);
 void Motors_DisableAll(void);
 void Motors_FSM_Initialize(void);
+void Motors_SendPositionCommand(void);
 void Motors_FSM_Tick(void);
 
 #endif

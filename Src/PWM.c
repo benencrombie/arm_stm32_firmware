@@ -35,7 +35,7 @@ static void PWM_Init_TIM2(void)
     TIM2->PSC = TIM2_PRESC;
 
     // Set ARR, auto reload register
-    TIM2->ARR = 1000;
+    TIM2->ARR = (uint16_t)MAX_ARR;
 
     // Configure PWM on ch2. CCMR1 contains ch1 and ch2
     // Ch1 is bits 15:8 of this register
@@ -49,7 +49,7 @@ static void PWM_Init_TIM2(void)
     TIM2->CCMR2 |= (0x06 << 4);  // PWM mode 1
     TIM2->CCMR2 |= (0x01 << 3);  // output compare preload
 
-    // Set duty cycle for ch2
+    // Set duty cycle for ch2. Will be reset anyway, dont think i need to initialize?
     TIM2->CCR2 = 500; // Defaulting. this will be changed when starting a pwm
 
     // Set the duty cycle for ch3
@@ -90,7 +90,7 @@ static void PWM_Init_TIM3(void)
     TIM3->PSC = TIM3_PRESC;
 
     // Set ARR, auto reload register
-    TIM3->ARR = 1000;
+    TIM3->ARR = (uint16_t)MAX_ARR;
 
     // Configure PWM on ch1. Bits 7:0
     TIM3->CCMR1 &= ~(0xFF << 0); // clear ch1
@@ -141,7 +141,7 @@ static void PWM_Init_TIM4(void)
     TIM4->PSC = TIM4_PRESC;
 
     // Set ARR, auto reload register
-    TIM4->ARR = 1000;
+    TIM4->ARR = (uint16_t)MAX_ARR;
 
     // Configure PWM on ch1. Bits 7:0
     TIM4->CCMR1 &= ~(0xFF << 0); // clear ch1
@@ -181,7 +181,7 @@ static void PWM_Init_TIM5(void)
     TIM5->PSC = TIM5_PRESC;
 
     // Set ARR, auto reload register
-    TIM5->ARR = 1000;
+    TIM5->ARR = (uint16_t)MAX_ARR;
 
     // Configure PWM on ch1. Bits 7:0
     TIM5->CCMR1 &= ~(0xFF << 0); // clear ch1
