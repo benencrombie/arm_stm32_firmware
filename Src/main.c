@@ -5,8 +5,11 @@
 #include "SysTick.h"
 #include "stm32f446xx.h"
 
-// defines
+// Debug flags dictate what is sent through UART. If you turn everything on you will get... a lot
 #define DEBUG 1
+#ifdef DEBUG
+#define DBUG_MOTORS 1
+#endif
 
 // prototypes
 static void SystemClock_Config_84MHz(void);
@@ -61,7 +64,6 @@ int main(void)
 #if DEBUG
                 // Toggle test pin - hooked up to LED, easily shows that CPU is not hanging
                 GPIO_ToggleTestPin();
-
 #endif
             }
         }
@@ -71,7 +73,9 @@ int main(void)
 }
 
 /**
- * @brief configure the clock to be 84MHz (stm32f446 is capable), default is 16MHz
+ * @brief configure the clock to be 84MHz (stm32f446 is capable), default is 16MHz. This is vibe
+ * coded for the most part, but it works and is common in STM architectures. Little risk of this
+ * failing.
  * @param void
  * @return void
  */

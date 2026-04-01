@@ -109,8 +109,9 @@ typedef struct
 // Prototypes
 void Motors_RampDownAll(void);
 void Motors_DisableAll(void);
+void Motors_EnableAll(void);
 void Motors_FSM_Initialize(void);
-void Motors_SendPositionCommand(void);
+void Motors_SendPositionCommand(uint8_t payload, uint16_t size);
 void Motors_FSM_Tick(void);
 
 #endif

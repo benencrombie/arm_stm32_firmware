@@ -20,6 +20,13 @@ priority.
 // flag for ms
 volatile uint32_t f_ms = 0;
 
+/**
+ * @brief this function spins up a millisecond counter from the cpu's 84 MHz. This is vibe
+ * coded for the most part, but it works and is common in STM architectures. Little risk of this
+ * failing.
+ * @param void
+ * @returns void
+ */
 void SysTick_Initialize(void)
 {
     // SysTick is the hardware countdown timer insite Cortex-M4

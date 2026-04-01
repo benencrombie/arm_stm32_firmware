@@ -4,6 +4,8 @@ filename: MotorDriver.c
 Controls motor through fsm. Motors have acceleration, deceleration, and at speed states
 */
 
+// TODO make uart module for debugging
+
 // TODO need to figure out logic for enabling motors/pwms separately. For these motors, when EN is
 // on but PWM is not, the joint is in brake mode which is good. If i completely unlatch EN whenever
 // a motor isn't moving, it will be in freedrive.
@@ -118,9 +120,8 @@ s_MotorStruct MOTOR5 = {
 /**
  * Private Functions
  *
- *
- *
- *
+ * These are helper funcitons used in the public API's abstraction. There should not be a need to
+ * call any of these outside of this module.
  */
 
 /**
@@ -145,9 +146,6 @@ static void SingleMotor_SetArr(s_MotorStruct *motor, uint32_t arr_val)
  */
 static void SingleMotor_Enable(s_MotorStruct *motor)
 {
-    // TODO need to make sure motors 1&4 or 2&5 (whatever the pairing was) aren't enabled at the
-    // same time. Figure out what to do here
-
     // Change motor state to braked. This just enables the motor, but doesn't turn the PWM on. This
     // will be handled elsewhere
     motor->motor_state = MTR_BRAKED;
@@ -166,7 +164,7 @@ static void SingleMotor_Disable(s_MotorStruct *motor)
     // Clear en pin
     GPIO_Clear(MTR_EN_PORT, motor->motor_en_pin);
 
-    // Disable PWM channel
+    // Disable PWM channel. There is no situation to have PWM on but the EN cleared
     PWM_DisableChannel(motor->motor_num);
 
     // Reset the arr val in struct for tracking
@@ -182,10 +180,8 @@ static void SingleMotor_Disable(s_MotorStruct *motor)
 /**
  * Public API
  *
- *
- *
- *
- *
+ * These are operations that are accessible from the mainloop/FSM.  Eventually, these will be made
+ * accessible by the raspberri pi, and that is why I am developing a payload structure.
  */
 
 /**
@@ -209,6 +205,25 @@ void Motors_DisableAll(void)
 }
 
 /**
+ * @brief Enable all motors, taking them out of freedrive
+ * @param void
+ * @return void
+ */
+void Motors_EnableAll(void)
+{
+    // Set all ENs
+    SingleMotor_Enable(&MOTOR0);
+    SingleMotor_Enable(&MOTOR1);
+    SingleMotor_Enable(&MOTOR2);
+    SingleMotor_Enable(&MOTOR3);
+    SingleMotor_Enable(&MOTOR4);
+    SingleMotor_Enable(&MOTOR5);
+
+    // Transition into a braked state
+    motor_system_state = MTRSYS_BRAKED;
+}
+
+/**
  * @brief Ramp down all motors. Soft stop
  * @param void
  * @return void
@@ -228,23 +243,17 @@ void Motors_RampDownAll(void)
 }
 
 /**
- * @brief Initialize the motors FSM
+ * @brief Initialize the motors FSM. Called on startup or after an emergency stop.
  * @param void
  * @return void
  */
 void Motors_FSM_Initialize(void)
 {
-    // Called on startup or after an emergency stop.
+    // Enable all motors. Whether a motor moves or not is dictated by the PWM channel, not this
+    Motors_EnableAll();
 
     ///////////////////////////
     // TODO remove from init once I make a trigger for spinning up motors
-    PWM_EnableChannel(M0);
-    PWM_EnableChannel(M1);
-    PWM_EnableChannel(M2);
-    PWM_EnableChannel(M3);
-    PWM_EnableChannel(M4);
-    PWM_EnableChannel(M5);
-
     MOTOR0.motor_destination_state = MTR_ATSPEED_FAST;
     MOTOR1.motor_destination_state = MTR_ATSPEED_FAST;
     MOTOR2.motor_destination_state = MTR_ATSPEED_FAST;
@@ -257,17 +266,30 @@ void Motors_FSM_Initialize(void)
     motor_system_state = MTRSYS_RUNNING; // TODO change to braked when done testing
 }
 
-void Motors_SendPositionCommand(void)
+/**
+ * @brief Command a motor to do something
+ * @param payload the command data, payload is TBD
+ * @param size the size of the data
+ * @return void
+ */
+void Motors_SendPositionCommand(uint8_t payload, uint16_t size)
 {
     // TODO build out a payload to tell a motor to rotate X degrees. This is going to be sick dude
+
+    // First step would be transitioning the motor system into a running state
+
+    // Second step would be setting the destination state/or other parameters (in the future) for
+    // the motor
+
+    // Third step would be enabling the PWM for a motor. They should already be enabled unless
+    // something went wrong
 }
 
 /**
  * FSM Operations
  *
- *
- *
- *
+ * The FSM handles all motor operations on a 1ms tick, including setting motor destination states
+ * and handling motor state transitions.
  */
 
 /**
@@ -277,17 +299,82 @@ void Motors_SendPositionCommand(void)
  */
 static void SingleMotor_AccelerateOnTick(s_MotorStruct *motor)
 {
+    // TODO do like the same thing from the decel tick but for accel
+
     // Calculate the new ARR to increase speed TODO
     next_arr_val = 999;
 
-    // Check lower bound
-    if (next_arr_val < MIN_ARR)
+    // Compare arr to that of the destination state
+    switch (motor->motor_destination_state)
     {
-        next_arr_val = MIN_ARR;
+        case MTR_BRAKED:
+        {
+            // Shouldn't happen
+            break;
+        }
+        case MTR_ATSPEED_SLOW:
+        {
+            // Check if a motor's arr is at slow/undershot
+            if (next_arr_val <= motor->motor_slow_arr)
+            {
+                // Set the arr to the slow arr
+                next_arr_val = motor->motor_slow_arr;
+                SingleMotor_SetArr(motor, next_arr_val);
+
+                // Change the motor state to at speed
+                motor->motor_state = MTR_ATSPEED_SLOW;
+            }
+            else
+            {
+                SingleMotor_SetArr(motor, next_arr_val);
+            }
+            break;
+        }
+        case MTR_ATSPEED_MID:
+        {
+            // Check if a motor's arr is at mid/undershot
+            if (next_arr_val <= motor->motor_mid_arr)
+            {
+                // Set the arr to the mid arr
+                next_arr_val = motor->motor_mid_arr;
+                SingleMotor_SetArr(motor, next_arr_val);
+
+                // Change the motor state to at speed
+                motor->motor_state = MTR_ATSPEED_MID;
+            }
+            break;
+        }
+        case MTR_ATSPEED_FAST:
+        {
+            // Check if a motor's arr is at fast/undershot
+            if (next_arr_val <= motor->motor_fast_arr)
+            {
+                // Set the arr to the fast arr
+                next_arr_val = motor->motor_fast_arr;
+                SingleMotor_SetArr(motor, next_arr_val);
+
+                // Change the motor state to at speed
+                motor->motor_state = MTR_ATSPEED_FAST;
+            }
+            break;
+        }
+        default:
+        {
+            // Invalid destination state. Shouldn't happen
+            break;
+        }
     }
 
-    // Increment ramp counter
-    motor->motor_ramp_ticks++;
+    // Increment the ramp counter
+    if (motor->motor_ramp_counter < motor->motor_ramp_ticks)
+    {
+        motor->motor_ramp_counter++;
+    }
+    else
+    {
+        // Already fully ramped up. This shouldn't happen if I anticipate everything
+        // correctly.
+    }
 }
 
 /**
@@ -310,7 +397,7 @@ static void SingleMotor_DecelerateOnTick(s_MotorStruct *motor)
             // Check if the new arr is bottomed out
             if (next_arr_val >= arr_reset_val)
             {
-                // Disable PWM, keeping EN pin on
+                // Disable PWM, keeping EN pin on so the motor is not in freedrive
                 PWM_DisableChannel(motor->motor_num);
 
                 // Set arr to max
@@ -377,6 +464,17 @@ static void SingleMotor_DecelerateOnTick(s_MotorStruct *motor)
             break;
         }
     }
+
+    // Decrement the tick counter
+    if (motor->motor_ramp_counter > 0)
+    {
+        motor->motor_ramp_counter--;
+    }
+    else
+    {
+        // Already fully ramped down. This shouldn't happen if I anticipate everything
+        // correctly.
+    }
 }
 
 /**
@@ -388,6 +486,8 @@ static void SingleMotor_CruiseOnTick(s_MotorStruct *motor)
 {
     // TODO use position params or something else to determine when we need to start
     // decelerating.
+
+    // Otherwise, do nothing
 }
 
 /**
@@ -398,9 +498,7 @@ static void SingleMotor_CruiseOnTick(s_MotorStruct *motor)
  */
 static void SingleMotor_UpdateOnTick(s_MotorStruct *motor)
 {
-    // check if accelerating or decelerating...
-    // Then, within those, check current arr to what the arr should be
-    // Then, transition into a state if applicable
+    // Handle motor's current state
     switch (motor->motor_state)
     {
         case MTR_DISABLED:
