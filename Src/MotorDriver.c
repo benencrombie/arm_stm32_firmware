@@ -1,14 +1,12 @@
 /*
 filename: MotorDriver.c
+author: Benen Crombie
 
 Controls motor through fsm. Motors have acceleration, deceleration, and at speed states
+Motor speed profiles are controlled at a 1000 Hz (every millisecond) tick. To ensure accurate
+position with just the steppers, motor stops (PWM disabling) is monitored on timer interrupts. This
+prevents there being a desync between the timer and 1000 Hz ticker.
 */
-
-// TODO make uart module for debugging
-
-// TODO need to figure out logic for enabling motors/pwms separately. For these motors, when EN is
-// on but PWM is not, the joint is in brake mode which is good. If i completely unlatch EN whenever
-// a motor isn't moving, it will be in freedrive.
 
 #include "MotorDriver.h"
 #include "GPIO.h"
@@ -19,8 +17,18 @@ Controls motor through fsm. Motors have acceleration, deceleration, and at speed
 e_MotorSystemState motor_system_state =
     MTRSYS_RUNNING; // TODO Start at DISABLED, jumping straight to RUNNING for testing purposes
 
+// Motor variables
 uint32_t arr_reset_val = MAX_ARR;
 uint32_t next_arr_val;
+uint32_t tim2_step_counter = 0;
+uint32_t tim3_step_counter = 0;
+uint32_t tim4_step_counter = 0;
+uint32_t tim5_step_counter = 0;
+bool tim2_paused = 0; // Not really tim2 being paused, but whatever motor is on that timer at a
+                      // given point. Functionality for later, not needed now.
+bool tim3_paused = 0;
+bool tim4_paused = 0;
+bool tim5_paused = 0;
 
 /**
  * Motor structs:
@@ -30,6 +38,7 @@ s_MotorStruct MOTOR0 = {
     .motor_num               = M0,
     .motor_state             = MTR_DISABLED,
     .motor_destination_state = MTR_DISABLED,
+    .motor_destination_steps = 0,
     .motor_en_pin            = MTR0_EN_PIN,
     .motor_dir_pin           = MTR0_DIR_PIN,
     .motor_step_port         = MTR0_STEP_PORT,
@@ -38,13 +47,14 @@ s_MotorStruct MOTOR0 = {
     .motor_slow_arr          = M0_ARR_SLOWSPEED,
     .motor_mid_arr           = M0_ARR_MIDSPEED,
     .motor_fast_arr          = M0_ARR_FASTSPEED,
-    .motor_ramp_ticks        = M0_RAMP_TICKS,
-    .motor_ramp_counter      = 0,
+    .motor_ramp_steps        = M0_RAMP_STEPS,
+    .motor_step_counter      = &tim2_step_counter,
 };
 s_MotorStruct MOTOR1 = {
     .motor_num               = M1,
     .motor_state             = MTR_DISABLED,
     .motor_destination_state = MTR_DISABLED,
+    .motor_destination_steps = 0,
     .motor_en_pin            = MTR1_EN_PIN,
     .motor_dir_pin           = MTR1_DIR_PIN,
     .motor_step_port         = MTR1_STEP_PORT,
@@ -53,13 +63,14 @@ s_MotorStruct MOTOR1 = {
     .motor_slow_arr          = M1_ARR_SLOWSPEED,
     .motor_mid_arr           = M1_ARR_MIDSPEED,
     .motor_fast_arr          = M1_ARR_FASTSPEED,
-    .motor_ramp_ticks        = M1_RAMP_TICKS,
-    .motor_ramp_counter      = 0,
+    .motor_ramp_steps        = M1_RAMP_STEPS,
+    .motor_step_counter      = &tim3_step_counter,
 };
 s_MotorStruct MOTOR2 = {
     .motor_num               = M2,
     .motor_state             = MTR_DISABLED,
     .motor_destination_state = MTR_DISABLED,
+    .motor_destination_steps = 0,
     .motor_en_pin            = MTR2_EN_PIN,
     .motor_dir_pin           = MTR2_DIR_PIN,
     .motor_step_port         = MTR2_STEP_PORT,
@@ -68,13 +79,14 @@ s_MotorStruct MOTOR2 = {
     .motor_slow_arr          = M2_ARR_SLOWSPEED,
     .motor_mid_arr           = M2_ARR_MIDSPEED,
     .motor_fast_arr          = M2_ARR_FASTSPEED,
-    .motor_ramp_ticks        = M2_RAMP_TICKS,
-    .motor_ramp_counter      = 0,
+    .motor_ramp_steps        = M2_RAMP_STEPS,
+    .motor_step_counter      = &tim4_step_counter,
 };
 s_MotorStruct MOTOR3 = {
     .motor_num               = M3,
     .motor_state             = MTR_DISABLED,
     .motor_destination_state = MTR_DISABLED,
+    .motor_destination_steps = 0,
     .motor_en_pin            = MTR3_EN_PIN,
     .motor_dir_pin           = MTR3_DIR_PIN,
     .motor_step_port         = MTR3_STEP_PORT,
@@ -83,13 +95,14 @@ s_MotorStruct MOTOR3 = {
     .motor_slow_arr          = M3_ARR_SLOWSPEED,
     .motor_mid_arr           = M3_ARR_MIDSPEED,
     .motor_fast_arr          = M3_ARR_FASTSPEED,
-    .motor_ramp_ticks        = M3_RAMP_TICKS,
-    .motor_ramp_counter      = 0,
+    .motor_ramp_steps        = M3_RAMP_STEPS,
+    .motor_step_counter      = &tim5_step_counter,
 };
 s_MotorStruct MOTOR4 = {
     .motor_num               = M4,
     .motor_state             = MTR_DISABLED,
     .motor_destination_state = MTR_DISABLED,
+    .motor_destination_steps = 0,
     .motor_en_pin            = MTR4_EN_PIN,
     .motor_dir_pin           = MTR4_DIR_PIN,
     .motor_step_port         = MTR4_STEP_PORT,
@@ -98,13 +111,14 @@ s_MotorStruct MOTOR4 = {
     .motor_slow_arr          = M4_ARR_SLOWSPEED,
     .motor_mid_arr           = M4_ARR_MIDSPEED,
     .motor_fast_arr          = M4_ARR_FASTSPEED,
-    .motor_ramp_ticks        = M4_RAMP_TICKS,
-    .motor_ramp_counter      = 0,
+    .motor_ramp_steps        = M4_RAMP_STEPS,
+    .motor_step_counter      = &tim2_step_counter,
 };
 s_MotorStruct MOTOR5 = {
     .motor_num               = M5,
     .motor_state             = MTR_DISABLED,
     .motor_destination_state = MTR_DISABLED,
+    .motor_destination_steps = 0,
     .motor_en_pin            = MTR5_EN_PIN,
     .motor_dir_pin           = MTR5_DIR_PIN,
     .motor_step_port         = MTR5_STEP_PORT,
@@ -113,8 +127,8 @@ s_MotorStruct MOTOR5 = {
     .motor_slow_arr          = M5_ARR_SLOWSPEED,
     .motor_mid_arr           = M5_ARR_MIDSPEED,
     .motor_fast_arr          = M5_ARR_FASTSPEED,
-    .motor_ramp_ticks        = M5_RAMP_TICKS,
-    .motor_ramp_counter      = 0,
+    .motor_ramp_steps        = M5_RAMP_STEPS,
+    .motor_step_counter      = &tim3_step_counter,
 };
 
 /**
@@ -155,6 +169,88 @@ static void SingleMotor_Enable(s_MotorStruct *motor)
 }
 
 /**
+ * @brief starts a single motor's pwm
+ * @param *motor pointer to the motor struct
+ * @param destination_state the destination motor state
+ * @param destination_steps how many steps to take upon starting the motor
+ * @return void
+ */
+void SingleMotor_Start(s_MotorStruct *motor, uint8_t destination_state, uint16_t destination_steps)
+{
+    // Initialize flag for illegal motor start
+    uint8_t f_illegal_motor_start = 0;
+
+    // Check if this pwm is allowed to start. Only restrictions are on motors 0 & 4, then 1 & 5
+    // running at the same time bc they're on the same timers.
+    switch (motor->motor_num)
+    {
+        case M0:
+        {
+            // If motor 4 is running, nuh uh
+            if (MOTOR4.motor_state != MTR_BRAKED && MOTOR4.motor_state != MTR_DISABLED)
+            {
+                // Don't do that
+                f_illegal_motor_start = 1;
+            }
+            break;
+        }
+        case M1:
+        {
+            // If motor 5 is running, nuh uh
+            if (MOTOR5.motor_state != MTR_BRAKED && MOTOR5.motor_state != MTR_DISABLED)
+            {
+                // Don't do that
+                f_illegal_motor_start = 1;
+            }
+            break;
+        }
+        case M2:
+        {
+            /* no op. ur good */
+            break;
+        }
+        case M3:
+        {
+            /* no op. ur good */
+            break;
+        }
+        case M4:
+        {
+            // If motor 0 is running, nuh uh
+            if (MOTOR0.motor_state != MTR_BRAKED && MOTOR4.motor_state != MTR_DISABLED)
+            {
+                // Don't do that
+                f_illegal_motor_start = 1;
+            }
+            break;
+        }
+        case M5:
+        {
+            // If motor 1 is running, nuh uh
+            if (MOTOR4.motor_state != MTR_BRAKED && MOTOR4.motor_state != MTR_DISABLED)
+            {
+                // Don't do that
+                f_illegal_motor_start = 1;
+            }
+            break;
+        }
+    }
+
+    // Start accelerating the motor if allowed
+    if (!f_illegal_motor_start)
+    {
+        // Set the current state to accelerating
+        motor->motor_state = MTR_ACCELERATING;
+
+        // Set the new destination state
+        motor->motor_destination_state = destination_state;
+
+        // Tell the motor how many steps to go
+        motor->motor_destination_steps = destination_steps;
+    }
+}
+
+/**
  * @brief disable a single motor
  * @param *motor pointer to the motor struct
  * @return void
@@ -172,9 +268,117 @@ static void SingleMotor_Disable(s_MotorStruct *motor)
 
     // Change motor state to stopped
     motor->motor_state = MTR_DISABLED;
+}
 
-    // Reset motor ramp counter
-    motor->motor_ramp_counter = 0;
+/**
+ * @brief function to check if any motors on tim2 need to be stopped based on their destination
+ * steps
+ * @param void
+ * @return flag for if motor should be stopped
+ */
+static bool Motors_CheckToStopTim2(void)
+{
+    // Check which motor is running
+    if (MOTOR0.motor_state != MTR_BRAKED && MOTOR0.motor_state != MTR_DISABLED)
+    {
+        // Check if the counter has passsed destination steps, return true if it has and unplug it
+        if (0)
+        {
+            PWM_DisableChannel(M0);
+            return true;
+        }
+    }
+    else if (MOTOR4.motor_state != MTR_BRAKED && MOTOR4.motor_state != MTR_DISABLED)
+    {
+        if (0)
+        {
+            PWM_DisableChannel(M4);
+            return true;
+        }
+    }
+    else
+    {
+        // Not sure why the interrupt was called. This shouldn't happen
+        return false;
+    }
+}
+
+/**
+ * @brief function to check if any motors on tim3 need to be stopped based on their destination
+ * steps
+ * @param void
+ * @return flag for if motor should be stopped
+ */
+static bool Motors_CheckToStopTim3(void)
+{
+    // Check which motor is running
+    if (MOTOR1.motor_state != MTR_BRAKED && MOTOR1.motor_state != MTR_DISABLED)
+    {
+        if (0)
+        {
+            PWM_DisableChannel(M1);
+            return true;
+        }
+    }
+    else if (MOTOR5.motor_state != MTR_BRAKED && MOTOR5.motor_state != MTR_DISABLED)
+    {
+        if (0)
+        {
+            PWM_DisableChannel(M5);
+            return true;
+        }
+    }
+    else
+    {
+        // Not sure why the interrupt was called. This shouldn't happen
+        return false;
+    }
+}
+
+/**
+ * @brief function to check if any motors on tim4 need to be stopped based on their destination
+ * steps
+ * @param void
+ * @return flag for if motor should be stopped
+ */
+static bool Motors_CheckToStopTim4(void)
+{
+    if (MOTOR2.motor_state != MTR_BRAKED && MOTOR2.motor_state != MTR_DISABLED)
+    {
+        if (0)
+        {
+            PWM_DisableChannel(M2);
+            return true;
+        }
+    }
+    else
+    {
+        // Not sure why the interrupt was called. This shouldn't happen
+        return false;
+    }
+}
+
+/**
+ * @brief function to check if any motors on tim5 need to be stopped based on their destination
+ * steps
+ * @param void
+ * @return flag for if motor should be stopped
+ */
+static bool Motors_CheckToStopTim5(void)
+{
+    if (MOTOR3.motor_state != MTR_BRAKED && MOTOR3.motor_state != MTR_DISABLED)
+    {
+        if (0)
+        {
+            PWM_DisableChannel(M3);
+            return true;
+        }
+    }
+    else
+    {
+        // Not sure why the interrupt was called. This shouldn't happen
+        return false;
+    }
 }
 
 /**
@@ -252,37 +456,8 @@ void Motors_FSM_Initialize(void)
     // Enable all motors. Whether a motor moves or not is dictated by the PWM channel, not this
     Motors_EnableAll();
 
-    ///////////////////////////
-    // TODO remove from init once I make a trigger for spinning up motors
-    MOTOR0.motor_destination_state = MTR_ATSPEED_FAST;
-    MOTOR1.motor_destination_state = MTR_ATSPEED_FAST;
-    MOTOR2.motor_destination_state = MTR_ATSPEED_FAST;
-    MOTOR3.motor_destination_state = MTR_ATSPEED_FAST;
-    MOTOR4.motor_destination_state = MTR_ATSPEED_FAST;
-    MOTOR5.motor_destination_state = MTR_ATSPEED_FAST;
-    ///////////////////////////
-
     // Kick off the fsm by jumping into BRAKED
     motor_system_state = MTRSYS_RUNNING; // TODO change to braked when done testing
-}
-
-/**
- * @brief Command a motor to do something
- * @param payload the command data, payload is TBD
- * @param size the size of the data
- * @return void
- */
-void Motors_SendPositionCommand(uint8_t payload, uint16_t size)
-{
-    // TODO build out a payload to tell a motor to rotate X degrees. This is going to be sick dude
-
-    // First step would be transitioning the motor system into a running state
-
-    // Second step would be setting the destination state/or other parameters (in the future) for
-    // the motor
-
-    // Third step would be enabling the PWM for a motor. They should already be enabled unless
-    // something went wrong
 }
 
 /**
@@ -364,17 +539,6 @@ static void SingleMotor_AccelerateOnTick(s_MotorStruct *motor)
             break;
         }
     }
-
-    // Increment the ramp counter
-    if (motor->motor_ramp_counter < motor->motor_ramp_ticks)
-    {
-        motor->motor_ramp_counter++;
-    }
-    else
-    {
-        // Already fully ramped up. This shouldn't happen if I anticipate everything
-        // correctly.
-    }
 }
 
 /**
@@ -405,6 +569,11 @@ static void SingleMotor_DecelerateOnTick(s_MotorStruct *motor)
 
                 // Change motor state to braked
                 motor->motor_state = MTR_BRAKED;
+
+                // Stops should be handled by the interrupt. Since this is the case, this behavior
+                // is unexpected so it should be logged. This means that slow downs were anticipated
+                // incorrectly.
+                // TODO log this in UART
             }
             else
             {
@@ -464,17 +633,6 @@ static void SingleMotor_DecelerateOnTick(s_MotorStruct *motor)
             break;
         }
     }
-
-    // Decrement the tick counter
-    if (motor->motor_ramp_counter > 0)
-    {
-        motor->motor_ramp_counter--;
-    }
-    else
-    {
-        // Already fully ramped down. This shouldn't happen if I anticipate everything
-        // correctly.
-    }
 }
 
 /**
@@ -484,10 +642,7 @@ static void SingleMotor_DecelerateOnTick(s_MotorStruct *motor)
  */
 static void SingleMotor_CruiseOnTick(s_MotorStruct *motor)
 {
-    // TODO use position params or something else to determine when we need to start
-    // decelerating.
-
-    // Otherwise, do nothing
+    // Honestly idk. Handle anticipation of new destination states?
 }
 
 /**
@@ -540,11 +695,11 @@ static void SingleMotor_UpdateOnTick(s_MotorStruct *motor)
 }
 
 /**
- * @brief Main tick of the motor FSM. Called in main
+ * @brief Main tick of the motor FSM at 1000Hz. Called in main
  * @param void
  * @return void
  */
-void Motors_FSM_Tick(void)
+void Motors_FSM_Tick1000Hz(void)
 {
     switch (motor_system_state)
     {
@@ -605,5 +760,92 @@ void Motors_FSM_Tick(void)
             // Stop all motors expeditiously
             Motors_DisableAll();
             break;
+    }
+}
+
+/**
+ * ISR functions
+ *
+ * ISR handlers for TIM2, TIM3, TIM4, and TIM5. Each clears the flag and increments the tracked step
+ * counter
+ */
+
+/**
+ * @brief Handle the tim2 interrupt
+ * @param void
+ * @return void
+ */
+void Motors_TIM2_IRQHandler(void)
+{
+    // Clear the interrupt flag
+    TIM2->SR &= ~TIM_SR_UIF;
+
+    // Stop timer if needed
+    bool stop_tim2 = Motors_CheckToStopTim2();
+
+    // Increment the step counter if not paused
+    if (!stop_tim2 && !tim2_paused)
+    {
+        tim2_step_counter++;
+    }
+}
+
+/**
+ * @brief Handle the tim3 interrupt
+ * @param void
+ * @return void
+ */
+void Motors_TIM3_IRQHandler(void)
+{
+    // Clear the interrupt flag
+    TIM3->SR &= ~TIM_SR_UIF;
+
+    // Stop timer if needed
+    bool stop_tim3 = Motors_CheckToStopTim3();
+
+    // Increment the step counter if not paused
+    if (!stop_tim3 && !tim3_paused)
+    {
+        tim3_step_counter++;
+    }
+}
+
+/**
+ * @brief Handle the tim4 interrupt
+ * @param void
+ * @return void
+ */
+void Motors_TIM4_IRQHandler(void)
+{
+    // Clear the interrupt flag
+    TIM4->SR &= ~TIM_SR_UIF;
+
+    // Stop timer if needed
+    bool stop_tim4 = Motors_CheckToStopTim4();
+
+    // Increment the step counter if not paused
+    if (!stop_tim4 && !tim4_paused)
+    {
+        tim4_step_counter++;
+    }
+}
+
+/**
+ * @brief Handle the tim5 interrupt
+ * @param void
+ * @return void
+ */
+void Motors_TIM5_IRQHandler(void)
+{
+    // Clear the interrupt flag
+    TIM5->SR &= ~TIM_SR_UIF;
+
+    // Stop timer if needed
+    bool stop_tim5 = Motors_CheckToStopTim5();
+
+    // Increment the step counter if not paused
+    if (!stop_tim5 && !tim5_paused)
+    {
+        tim5_step_counter++;
     }
 }

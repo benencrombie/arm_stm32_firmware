@@ -55,18 +55,21 @@ static void PWM_Init_TIM2(void)
     // Set the duty cycle for ch3
     TIM2->CCR3 = 500; // Defaulting. this will be changed when starting a pwm
 
-    // Enable channel 2 output (PA1, motor 0)
-    // TIM2->CCER |= TIM_CCER_CC2E;
-
-    // Enable channel 3 output (PA2, motor 4)
-    // TIM2->CCER |= TIM_CCER_CC3E;
-
     // Enable preload. This allows speed to be adjusted mid cycle smoothly
     // Added this in and speed transitions are a lot cleaner
     TIM2->CR1 |= TIM_CR1_ARPE;
 
     // Load up new config in the registers
     TIM2->EGR |= TIM_EGR_UG;
+
+    // Clear pending interrupt to ensure there isn't a pending one
+    TIM2->SR &= ~TIM_SR_UIF;
+
+    // Enable interrupt
+    TIM2->DIER |= TIM_DIER_UIE;
+
+    // Enable NVIC for interrupt
+    NVIC_EnableIRQ(TIM2_IRQn);
 
     // Start the timer
     TIM2->CR1 |= TIM_CR1_CEN;
@@ -108,17 +111,20 @@ static void PWM_Init_TIM3(void)
     // Set duty cycle for ch2
     TIM3->CCR2 = 500;
 
-    // Enable channel 1 output (PA6, motor 1)
-    // TIM3->CCER |= TIM_CCER_CC1E;
-
-    // Enable channel 2 output (PA7, motor 5)
-    // TIM3->CCER |= TIM_CCER_CC2E;
-
     // Enable ARR preload
     TIM3->CR1 |= TIM_CR1_ARPE;
 
     // Load up new config in the registers
     TIM3->EGR |= TIM_EGR_UG;
+
+    // Clear pending interrupt to ensure there isn't a pending one
+    TIM3->SR &= ~TIM_SR_UIF;
+
+    // Enable interrupt
+    TIM3->DIER |= TIM_DIER_UIE;
+
+    // Enable NVIC for interrupt
+    NVIC_EnableIRQ(TIM3_IRQn);
 
     // Start the timer
     TIM3->CR1 |= TIM_CR1_CEN;
@@ -151,14 +157,20 @@ static void PWM_Init_TIM4(void)
     // Set duty cycle for ch1
     TIM4->CCR1 = 500;
 
-    // Enable channel 1 output (PB6, motor 2)
-    // TIM4->CCER |= TIM_CCER_CC1E;
-
     // Enable ARR preload
     TIM4->CR1 |= TIM_CR1_ARPE;
 
     // Load up new config in the registers
     TIM4->EGR |= TIM_EGR_UG;
+
+    // Clear pending interrupt to ensure there isn't a pending one
+    TIM4->SR &= ~TIM_SR_UIF;
+
+    // Enable interrupt
+    TIM4->DIER |= TIM_DIER_UIE;
+
+    // Enable NVIC for interrupt
+    NVIC_EnableIRQ(TIM4_IRQn);
 
     // Start the timer
     TIM4->CR1 |= TIM_CR1_CEN;
@@ -191,14 +203,20 @@ static void PWM_Init_TIM5(void)
     // Set duty cycle for ch1
     TIM5->CCR1 = 500;
 
-    // Enable channel 1 output (PB6, motor 2)
-    // TIM5->CCER |= TIM_CCER_CC1E;
-
     // Enable ARR preload
     TIM5->CR1 |= TIM_CR1_ARPE;
 
     // Load up new config in the registers
     TIM5->EGR |= TIM_EGR_UG;
+
+    // Clear pending interrupt to ensure there isn't a pending one
+    TIM5->SR &= ~TIM_SR_UIF;
+
+    // Enable interrupt
+    TIM5->DIER |= TIM_DIER_UIE;
+
+    // Enable NVIC for interrupt
+    NVIC_EnableIRQ(TIM5_IRQn);
 
     // Start the timer
     TIM5->CR1 |= TIM_CR1_CEN;
@@ -226,24 +244,24 @@ void PWM_EnableChannel(e_MotorNum motor_number)
 {
     switch (motor_number)
     {
-    case M0:
-        TIM2->CCER |= TIM_CCER_CC2E; // enable channel 2
-        break;
-    case M1:
-        TIM3->CCER |= TIM_CCER_CC1E; // enable channel 1
-        break;
-    case M2:
-        TIM4->CCER |= TIM_CCER_CC1E; // enable channel 1
-        break;
-    case M3:
-        TIM5->CCER |= TIM_CCER_CC1E; // enable channel 1
-        break;
-    case M4:
-        TIM2->CCER |= TIM_CCER_CC3E; // enable channel 3
-        break;
-    case M5:
-        TIM3->CCER |= TIM_CCER_CC2E; // enable channel 2
-        break;
+        case M0:
+            TIM2->CCER |= TIM_CCER_CC2E; // enable channel 2
+            break;
+        case M1:
+            TIM3->CCER |= TIM_CCER_CC1E; // enable channel 1
+            break;
+        case M2:
+            TIM4->CCER |= TIM_CCER_CC1E; // enable channel 1
+            break;
+        case M3:
+            TIM5->CCER |= TIM_CCER_CC1E; // enable channel 1
+            break;
+        case M4:
+            TIM2->CCER |= TIM_CCER_CC3E; // enable channel 3
+            break;
+        case M5:
+            TIM3->CCER |= TIM_CCER_CC2E; // enable channel 2
+            break;
     }
 }
 
@@ -256,24 +274,24 @@ void PWM_DisableChannel(e_MotorNum motor_number)
 {
     switch (motor_number)
     {
-    case M0:
-        TIM2->CCER &= ~TIM_CCER_CC2E; // disable channel 2
-        break;
-    case M1:
-        TIM3->CCER &= ~TIM_CCER_CC1E; // disable channel 1
-        break;
-    case M2:
-        TIM4->CCER &= ~TIM_CCER_CC1E; // disable channel 1
-        break;
-    case M3:
-        TIM5->CCER &= ~TIM_CCER_CC1E; // disable channel 1
-        break;
-    case M4:
-        TIM2->CCER &= ~TIM_CCER_CC3E; // disable channel 3
-        break;
-    case M5:
-        TIM3->CCER &= ~TIM_CCER_CC2E; // disable channel 2
-        break;
+        case M0:
+            TIM2->CCER &= ~TIM_CCER_CC2E; // disable channel 2
+            break;
+        case M1:
+            TIM3->CCER &= ~TIM_CCER_CC1E; // disable channel 1
+            break;
+        case M2:
+            TIM4->CCER &= ~TIM_CCER_CC1E; // disable channel 1
+            break;
+        case M3:
+            TIM5->CCER &= ~TIM_CCER_CC1E; // disable channel 1
+            break;
+        case M4:
+            TIM2->CCER &= ~TIM_CCER_CC3E; // disable channel 3
+            break;
+        case M5:
+            TIM3->CCER &= ~TIM_CCER_CC2E; // disable channel 2
+            break;
     }
 }
 
@@ -309,21 +327,29 @@ void PWM_SetArr(e_MotorNum motor_number, uint32_t arr_val)
 
     switch (motor_number)
     {
-    case M0:
-        TIM2->ARR = clipped_arr;
-    case M1:
-        TIM3->ARR = clipped_arr;
-    case M2:
-        TIM4->ARR = clipped_arr;
-    case M3:
-        TIM5->ARR = clipped_arr;
-        // NOTE motors 4 and 5 re-use timers 2 and 3 respectively. Will need to be careful that
-        // these can't change speeds individually at the same time. Motor 0 is tied to motor 4,
-        // motor 1 is tied to motor 5 in terms of speed. With the mechanical config of the robot
-        // arm, these motors won't have to move at the same time with natural movements.
-    case M4:
-        TIM2->ARR = clipped_arr;
-    case M5:
-        TIM3->ARR = clipped_arr;
+        case M0:
+        {
+            TIM2->ARR = clipped_arr;
+        }
+        case M1:
+        {
+            TIM3->ARR = clipped_arr;
+        }
+        case M2:
+        {
+            TIM4->ARR = clipped_arr;
+        }
+        case M3:
+        {
+            TIM5->ARR = clipped_arr;
+        }
+        case M4:
+        {
+            TIM2->ARR = clipped_arr;
+        }
+        case M5:
+        {
+            TIM3->ARR = clipped_arr;
+        }
     }
 }

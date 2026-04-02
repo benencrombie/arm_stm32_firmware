@@ -1,5 +1,6 @@
 /*
 filename: PWM.h
+author: Benen Crombie
 
 Header for PWMs, timers 2,3,4, and 5
 */

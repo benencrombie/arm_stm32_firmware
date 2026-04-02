@@ -13,6 +13,11 @@
 
 // prototypes
 static void SystemClock_Config_84MHz(void);
+// interrupts
+void TIM2_IRQHandler(void);
+void TIM3_IRQHandler(void);
+void TIM4_IRQHandler(void);
+void TIM5_IRQHandler(void);
 
 // Initialize ms to the next second, or however frequently we want to do stuff. Highest frequency
 // activities as system speed (84 MHz) and milliseconds (1000 Hz)
@@ -58,7 +63,7 @@ int main(void)
                 ms_counter = 0;
 
                 // Update motors
-                Motors_FSM_Tick();
+                Motors_FSM_Tick1000Hz();
 
                 // Debug testing block, every 1 second
 #if DEBUG
@@ -119,4 +124,45 @@ static void SystemClock_Config_84MHz(void)
 
     // update CMSIS clock variable
     SystemCoreClockUpdate();
+}
+
+/**
+ * ISR Operations
+ *
+ * TIM2 - Motors 0 and 4
+ * TIM3 - Motors 1 and 5
+ * TIM4 - Motor 2
+ * TIM5 - Motor 3
+ */
+
+/**
+ * @brief TIM2 interrupt handler
+ */
+void TIM2_IRQHandler(void)
+{
+    Motors_TIM2_IRQHandler();
+}
+
+/**
+ * @brief TIM3 interrupt handler
+ */
+void TIM3_IRQHandler(void)
+{
+    Motors_TIM3_IRQHandler();
+}
+
+/**
+ * @brief TIM4 interrupt handler
+ */
+void TIM4_IRQHandler(void)
+{
+    Motors_TIM4_IRQHandler();
+}
+
+/**
+ * @brief TIM5 interrupt handler
+ */
+void TIM5_IRQHandler(void)
+{
+    Motors_TIM5_IRQHandler();
 }
