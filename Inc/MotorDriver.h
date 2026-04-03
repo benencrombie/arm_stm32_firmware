@@ -1,9 +1,9 @@
-/*
-filename: MotorDriver.h
-author: Benen Crombie
-
-header for MotorDriver.c
-*/
+/**
+ * filename: MotorDriver.h
+ * author: Benen Crombie
+ *
+ * header for MotorDriver.c
+ */
 
 #ifndef MTRDRVR_H
 #define MTRDRVR_H
@@ -111,7 +111,7 @@ typedef struct
 } s_MotorStruct;
 
 // Prototypes
-void SingleMotor_Start(s_MotorStruct *motor, uint8_t destination_state, uint16_t destination_steps);
+void Motors_StartMotor(uint8_t motor_num, uint8_t target_speed, uint16_t number_of_steps);
 void Motors_DisableAll(void);
 void Motors_EnableAll(void);
 void Motors_RampDownAll(void);

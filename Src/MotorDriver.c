@@ -1,16 +1,17 @@
-/*
-filename: MotorDriver.c
-author: Benen Crombie
-
-Controls motor through fsm. Motors have acceleration, deceleration, and at speed states
+/**
+ * filename: MotorDriver.c
+ * author: Benen Crombie
+ *
+ * Controls motor through fsm. Motors have acceleration, deceleration, and at speed states
 Motor speed profiles are controlled at a 1000 Hz (every millisecond) tick. To ensure accurate
 position with just the steppers, motor stops (PWM disabling) is monitored on timer interrupts. This
 prevents there being a desync between the timer and 1000 Hz ticker.
-*/
+ */
 
 #include "MotorDriver.h"
 #include "GPIO.h"
 #include "PWM.h"
+#include "UART.h"
 #include "main.h"
 
 // Overall motor actuation system state
@@ -175,7 +176,8 @@ static void SingleMotor_Enable(s_MotorStruct *motor)
  * @param destination_steps how many steps to take upon starting the motor
  * @return void
  */
-void SingleMotor_Start(s_MotorStruct *motor, uint8_t destination_state, uint16_t destination_steps)
+static void SingleMotor_StartWithDestination(s_MotorStruct *motor, uint8_t destination_state,
+                                             uint16_t destination_steps)
 {
     // Initialize flag for illegal motor start
     uint8_t f_illegal_motor_start = 0;
@@ -247,6 +249,33 @@ void SingleMotor_Start(s_MotorStruct *motor, uint8_t destination_state, uint16_t
 
         // Tell the motor how many steps to go
         motor->motor_destination_steps = destination_steps;
+
+        // Enable the PWM channel
+        PWM_EnableChannel(motor->motor_num);
+    }
+}
+
+/**
+ * @brief Public wrapper to start up a motor with explicit instructions
+ * @param motor_num the motor number
+ * @param target_speed the target speedd (e.g., MTR_ATSPEED_SLOW)
+ * @param number_of_steps the number of steps to take in this instruction
+ * @return void
+ */
+void Motors_StartMotor(uint8_t motor_num, uint8_t target_speed, uint16_t number_of_steps)
+{
+    switch (motor_num)
+    {
+        case M0:
+            SingleMotor_StartWithDestination(&MOTOR0, target_speed, number_of_steps);
+        case M1:
+            SingleMotor_StartWithDestination(&MOTOR0, target_speed, number_of_steps);
+        case M2:
+            SingleMotor_StartWithDestination(&MOTOR0, target_speed, number_of_steps);
+        case M3:
+            SingleMotor_StartWithDestination(&MOTOR0, target_speed, number_of_steps);
+        case M4:
+            SingleMotor_StartWithDestination(&MOTOR0, target_speed, number_of_steps);
     }
 }
 
@@ -282,17 +311,35 @@ static bool Motors_CheckToStopTim2(void)
     if (MOTOR0.motor_state != MTR_BRAKED && MOTOR0.motor_state != MTR_DISABLED)
     {
         // Check if the counter has passsed destination steps, return true if it has and unplug it
-        if (0)
+        if (*(MOTOR0.motor_step_counter) >= MOTOR0.motor_destination_steps)
         {
+            // Disable channel
             PWM_DisableChannel(M0);
+
+            // Reset relevant vars
+            *(MOTOR0.motor_step_counter) = 0;
+
+            // Change the states
+            MOTOR0.motor_state             = MTR_BRAKED;
+            MOTOR0.motor_destination_state = MTR_BRAKED;
+
             return true;
         }
     }
     else if (MOTOR4.motor_state != MTR_BRAKED && MOTOR4.motor_state != MTR_DISABLED)
     {
-        if (0)
+        if (*(MOTOR4.motor_step_counter) >= MOTOR4.motor_destination_steps)
         {
+            // Disable channel
             PWM_DisableChannel(M4);
+
+            // Reset relevant vars
+            *(MOTOR4.motor_step_counter) = 0;
+
+            // Change the states
+            MOTOR4.motor_state             = MTR_BRAKED;
+            MOTOR4.motor_destination_state = MTR_BRAKED;
+
             return true;
         }
     }
@@ -301,6 +348,9 @@ static bool Motors_CheckToStopTim2(void)
         // Not sure why the interrupt was called. This shouldn't happen
         return false;
     }
+
+    // Fall back to false if no stopping conditions are met
+    return false;
 }
 
 /**
@@ -314,17 +364,35 @@ static bool Motors_CheckToStopTim3(void)
     // Check which motor is running
     if (MOTOR1.motor_state != MTR_BRAKED && MOTOR1.motor_state != MTR_DISABLED)
     {
-        if (0)
+        if (*(MOTOR1.motor_step_counter) >= MOTOR1.motor_destination_steps)
         {
+            // Disable channel
             PWM_DisableChannel(M1);
+
+            // Reset relevant vars
+            *(MOTOR1.motor_step_counter) = 0;
+
+            // Change the states
+            MOTOR1.motor_state             = MTR_BRAKED;
+            MOTOR1.motor_destination_state = MTR_BRAKED;
+
             return true;
         }
     }
     else if (MOTOR5.motor_state != MTR_BRAKED && MOTOR5.motor_state != MTR_DISABLED)
     {
-        if (0)
+        if (*(MOTOR5.motor_step_counter) >= MOTOR5.motor_destination_steps)
         {
+            // Disable channel
             PWM_DisableChannel(M5);
+
+            // Reset relevant vars
+            *(MOTOR5.motor_step_counter) = 0;
+
+            // Change the states
+            MOTOR5.motor_state             = MTR_BRAKED;
+            MOTOR5.motor_destination_state = MTR_BRAKED;
+
             return true;
         }
     }
@@ -333,6 +401,9 @@ static bool Motors_CheckToStopTim3(void)
         // Not sure why the interrupt was called. This shouldn't happen
         return false;
     }
+
+    // Fall back to false if no stopping conditions are met
+    return false;
 }
 
 /**
@@ -345,9 +416,18 @@ static bool Motors_CheckToStopTim4(void)
 {
     if (MOTOR2.motor_state != MTR_BRAKED && MOTOR2.motor_state != MTR_DISABLED)
     {
-        if (0)
+        if (*(MOTOR2.motor_step_counter) >= MOTOR2.motor_destination_steps)
         {
+            // Disable channel
             PWM_DisableChannel(M2);
+
+            // Reset relevant vars
+            *(MOTOR2.motor_step_counter) = 0;
+
+            // Change the states
+            MOTOR2.motor_state             = MTR_BRAKED;
+            MOTOR2.motor_destination_state = MTR_BRAKED;
+
             return true;
         }
     }
@@ -356,6 +436,9 @@ static bool Motors_CheckToStopTim4(void)
         // Not sure why the interrupt was called. This shouldn't happen
         return false;
     }
+
+    // Fall back to false if no stopping conditions are met
+    return false;
 }
 
 /**
@@ -368,9 +451,18 @@ static bool Motors_CheckToStopTim5(void)
 {
     if (MOTOR3.motor_state != MTR_BRAKED && MOTOR3.motor_state != MTR_DISABLED)
     {
-        if (0)
+        if (*(MOTOR3.motor_step_counter) >= MOTOR3.motor_destination_steps)
         {
+            // Disable channel
             PWM_DisableChannel(M3);
+
+            // Reset relevant vars
+            *(MOTOR3.motor_step_counter) = 0;
+
+            // Change the states
+            MOTOR3.motor_state             = MTR_BRAKED;
+            MOTOR3.motor_destination_state = MTR_BRAKED;
+
             return true;
         }
     }
@@ -379,6 +471,9 @@ static bool Motors_CheckToStopTim5(void)
         // Not sure why the interrupt was called. This shouldn't happen
         return false;
     }
+
+    // Fall back to false if no stopping conditions are met
+    return false;
 }
 
 /**

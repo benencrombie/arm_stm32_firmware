@@ -1,9 +1,9 @@
-/*
-filename: PWM.c
-author: Benen Crombie
-
-PWM driver
-*/
+/**
+ * filename: PWM.c
+ * author: Benen Crombie
+ *
+ * Driver for timers, used for motor control
+ */
 
 #include "PWM.h"
 #include "MotorDriver.h"

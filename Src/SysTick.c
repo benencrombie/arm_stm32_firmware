@@ -1,15 +1,3 @@
-/*
-filename: SysTick.c
-author: Benen Crombie
-
-Timekeeper module. Flags for milliseconds
-
-TODO: hard to find documentation on the core_cm4.h registers. Got a lot of help from claude with
-the init and interrupt, but it either works or it doesn't so it isn't critical to debug just yet.
-Presumably, this is what HAL would do, but there isn't a lot of overhead here at all so low
-priority.
-*/
-
 #include "SysTick.h"
 #include "core_cm4.h"
 #include "main.h"

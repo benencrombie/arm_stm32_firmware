@@ -5,8 +5,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// TODO identify pins for USART, PWM, and other comms first, then use leftovers
-// as IOs
+// Globally used defines
+#define SYSHZ (84000000) // 84 MHz
 
 // Global vars
 extern uint32_t SystemCoreClock; // Current clock freq (adjusted to 84 MHz), making global incase
@@ -51,7 +51,7 @@ void SystemCoreClockUpdate(void);
  * a "brain"/raspberri pi is incorporated
  */
 
-// USART2 is for debug, built in through USB for devboard
+// USART2 is for debug, built in through USB for devboard so this is easy to use
 #define USART2_PORT   GPIOA
 #define USART2_TX_PIN 2 // PA2, AF7
 #define USART2_RX_PIN 3 // PA3, AF7

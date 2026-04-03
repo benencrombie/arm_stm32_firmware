@@ -1,9 +1,9 @@
-/*
-filename: SysTick.h
-author: Benen Crombie
-
-Header for SysTick.c
-*/
+/**
+ * filename: SysTick.h
+ * author: Benen Crombie
+ *
+ * Header for SysTick.c
+ */
 
 #ifndef SYSTICK_H
 #define SYSTICK_H

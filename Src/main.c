@@ -3,6 +3,7 @@
 #include "MotorDriver.h"
 #include "PWM.h"
 #include "SysTick.h"
+#include "USART.h"
 #include "stm32f446xx.h"
 
 // Debug flags dictate what is sent through UART. If you turn everything on you will get... a lot
@@ -14,10 +15,11 @@
 // prototypes
 static void SystemClock_Config_84MHz(void);
 // interrupts
-void TIM2_IRQHandler(void);
-void TIM3_IRQHandler(void);
-void TIM4_IRQHandler(void);
-void TIM5_IRQHandler(void);
+void TIM2_IRQHandler(void);   // Motors 0 and 4 steps
+void TIM3_IRQHandler(void);   // Motors 1 and 5 steps
+void TIM4_IRQHandler(void);   // Motor 2 steps
+void TIM5_IRQHandler(void);   // Motor 3 steps
+void USART2_IRQHandler(void); // Debug comms TX
 
 // Initialize ms to the next second, or however frequently we want to do stuff. Highest frequency
 // activities as system speed (84 MHz) and milliseconds (1000 Hz)
@@ -34,16 +36,27 @@ int main(void)
     // Initialize ticker for ms flags
     SysTick_Initialize();
 
-    // Initialize all pins
+    // Initialize simple IOs
     GPIO_Initialize();
 
     // Initialize PWMs on timers
     PWM_Initialize();
 
+    // Initialize UART for debug and comms later
+    UART_Initialize();
+
     // Allow motors to be used
     Motors_FSM_Initialize(); // TODO maybe this and any other small FSMs should be called within the
                              // big FSM. Haven't architected what that'll look like just yet, but
                              // this is good for bringup
+
+    ////////////////////////
+    // PRELOOP TESTING BLOCK
+    ////////////////////////
+
+    Motors_StartMotor(M0, MTR_ATSPEED_MID, 100); // Set M0 to go at mid speed for 100 steps
+
+    ////////////////////////
 
     while (1)
     {
@@ -70,10 +83,19 @@ int main(void)
                 // Toggle test pin - hooked up to LED, easily shows that CPU is not hanging
                 GPIO_ToggleTestPin();
 #endif
+                ////////////////////////
+                // 1000 HZ TESTING BLOCK
+                ////////////////////////
+
+                ////////////////////////
             }
         }
 
-        // 84 MHz loop
+        ////////////////////////
+        // SYSTICK TESTING BLOCK
+        ////////////////////////
+
+        ////////////////////////
     }
 }
 
@@ -116,7 +138,7 @@ static void SystemClock_Config_84MHz(void)
     while (!(RCC->CR & RCC_CR_PLLRDY))
         ;
 
-    // switch SYSCLK to PLL
+    // base SYSCLK from PLL
     RCC->CFGR &= ~RCC_CFGR_SW;
     RCC->CFGR |= RCC_CFGR_SW_PLL;
     while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL)
@@ -165,4 +187,12 @@ void TIM4_IRQHandler(void)
 void TIM5_IRQHandler(void)
 {
     Motors_TIM5_IRQHandler();
+}
+
+/**
+ * @brief USART2 interrupt handler
+ */
+void USART2_IRQHandler(void)
+{
+    UART_USART2_IRQHandler();
 }
