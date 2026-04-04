@@ -43,7 +43,7 @@ int main(void)
     PWM_Initialize();
 
     // Initialize UART for debug and comms later
-    UART_Initialize();
+    USART_Initialize();
 
     // Allow motors to be used
     Motors_FSM_Initialize(); // TODO maybe this and any other small FSMs should be called within the
@@ -54,7 +54,11 @@ int main(void)
     // PRELOOP TESTING BLOCK
     ////////////////////////
 
+    // Test out motor fsm
     Motors_StartMotor(M0, MTR_ATSPEED_MID, 100); // Set M0 to go at mid speed for 100 steps
+
+    // Test out uart
+    USART2_SendString("Fully Init'd");
 
     ////////////////////////
 
@@ -138,7 +142,28 @@ static void SystemClock_Config_84MHz(void)
     while (!(RCC->CR & RCC_CR_PLLRDY))
         ;
 
-    // base SYSCLK from PLL
+    /**
+     * Peripheral bus clocks
+     *
+     * HCLK = 84 MHz
+     * PCLK1 = 21 MHz
+     * APB2 = 84 MHz
+     * SYSCLK = 84 MHz
+     */
+
+    // AHB, don't prescale, so HCLK = 84 MHz
+    RCC->CFGR &= ~RCC_CFGR_HPRE;
+    RCC->CFGR |= RCC_CFGR_HPRE_DIV1;
+
+    // APB1, prescale by /4, so PCLK1 = 21 MHz. Arbitrarily chosen
+    RCC->CFGR &= ~RCC_CFGR_PPRE1;
+    RCC->CFGR |= RCC_CFGR_PPRE1_DIV4;
+
+    // APB2, prescale by /1, so PCLK2 = 84 MHz
+    RCC->CFGR &= ~RCC_CFGR_PPRE2;
+    RCC->CFGR |= RCC_CFGR_PPRE2_DIV1;
+
+    // set SYSCLK source from PLL
     RCC->CFGR &= ~RCC_CFGR_SW;
     RCC->CFGR |= RCC_CFGR_SW_PLL;
     while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL)
@@ -194,5 +219,5 @@ void TIM5_IRQHandler(void)
  */
 void USART2_IRQHandler(void)
 {
-    UART_USART2_IRQHandler();
+    USART_USART2_IRQHandler();
 }

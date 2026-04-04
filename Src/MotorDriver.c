@@ -11,7 +11,7 @@ prevents there being a desync between the timer and 1000 Hz ticker.
 #include "MotorDriver.h"
 #include "GPIO.h"
 #include "PWM.h"
-#include "UART.h"
+#include "USART.h"
 #include "main.h"
 
 // Overall motor actuation system state

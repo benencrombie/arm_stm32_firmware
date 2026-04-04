@@ -107,7 +107,7 @@ typedef struct
                                // for all ramps, even if its a step up from slow to mid speed. Fine
                                // for now and I don't want a ton of bloat in this struct, but keep
                                // in mind for future optimizations
-    uint32_t *motor_step_counter; // pointer to the steps counter
+    volatile uint32_t *motor_step_counter; // pointer to the steps counter
 } s_MotorStruct;
 
 // Prototypes
