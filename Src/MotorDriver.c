@@ -14,6 +14,9 @@ prevents there being a desync between the timer and 1000 Hz ticker.
 #include "USART.h"
 #include "main.h"
 
+// Prototypes
+static uint32_t SQRT_Approximation(uint32_t num);
+
 // Overall motor actuation system state
 e_MotorSystemState motor_system_state =
     MTRSYS_RUNNING; // TODO Start at DISABLED, jumping straight to RUNNING for testing purposes
@@ -48,7 +51,7 @@ s_MotorStruct MOTOR0 = {
     .motor_slow_arr          = M0_ARR_SLOWSPEED,
     .motor_mid_arr           = M0_ARR_MIDSPEED,
     .motor_fast_arr          = M0_ARR_FASTSPEED,
-    .motor_ramp_accel        = M0_RAMP_ACCEL,
+    .motor_ramp_factor       = M0_RAMP_FACTOR,
     .motor_ramp_vel          = 0,
     .motor_step_counter      = &tim2_step_counter,
 };
@@ -65,7 +68,7 @@ s_MotorStruct MOTOR1 = {
     .motor_slow_arr          = M1_ARR_SLOWSPEED,
     .motor_mid_arr           = M1_ARR_MIDSPEED,
     .motor_fast_arr          = M1_ARR_FASTSPEED,
-    .motor_ramp_accel        = M1_RAMP_ACCEL,
+    .motor_ramp_factor       = M1_RAMP_FACTOR,
     .motor_ramp_vel          = 0,
     .motor_step_counter      = &tim3_step_counter,
 };
@@ -82,7 +85,7 @@ s_MotorStruct MOTOR2 = {
     .motor_slow_arr          = M2_ARR_SLOWSPEED,
     .motor_mid_arr           = M2_ARR_MIDSPEED,
     .motor_fast_arr          = M2_ARR_FASTSPEED,
-    .motor_ramp_accel        = M2_RAMP_ACCEL,
+    .motor_ramp_factor       = M2_RAMP_FACTOR,
     .motor_ramp_vel          = 0,
     .motor_step_counter      = &tim4_step_counter,
 };
@@ -99,7 +102,7 @@ s_MotorStruct MOTOR3 = {
     .motor_slow_arr          = M3_ARR_SLOWSPEED,
     .motor_mid_arr           = M3_ARR_MIDSPEED,
     .motor_fast_arr          = M3_ARR_FASTSPEED,
-    .motor_ramp_accel        = M3_RAMP_ACCEL,
+    .motor_ramp_factor       = M3_RAMP_FACTOR,
     .motor_ramp_vel          = 0,
     .motor_step_counter      = &tim5_step_counter,
 };
@@ -116,7 +119,7 @@ s_MotorStruct MOTOR4 = {
     .motor_slow_arr          = M4_ARR_SLOWSPEED,
     .motor_mid_arr           = M4_ARR_MIDSPEED,
     .motor_fast_arr          = M4_ARR_FASTSPEED,
-    .motor_ramp_accel        = M4_RAMP_ACCEL,
+    .motor_ramp_factor       = M4_RAMP_FACTOR,
     .motor_ramp_vel          = 0,
     .motor_step_counter      = &tim2_step_counter,
 };
@@ -133,7 +136,7 @@ s_MotorStruct MOTOR5 = {
     .motor_slow_arr          = M5_ARR_SLOWSPEED,
     .motor_mid_arr           = M5_ARR_MIDSPEED,
     .motor_fast_arr          = M5_ARR_FASTSPEED,
-    .motor_ramp_accel        = M5_RAMP_ACCEL,
+    .motor_ramp_factor       = M5_RAMP_FACTOR,
     .motor_ramp_vel          = 0,
     .motor_step_counter      = &tim3_step_counter,
 };
@@ -499,20 +502,32 @@ static bool Motors_CheckToStopTim5(void)
 }
 
 /**
+ * @brief Function to approximate the square root of a number, as nonintensive as possible
+ * @param num the number to square root
+ * @return the square root approximation
+ */
+static uint32_t SQRT_Approximation(uint32_t num)
+{
+    uint32_t sqrt;
+    sqrt = 10000;
+    return sqrt;
+}
+
+/**
  * @brief calculate the next ARR value given the current, target, and steps
  * @param state the motor state (accel or decel expected)
- * @param curr_arr current arr value
- * @param ramp_accel how aggressively to ramp
+ * @param prev_arr previous arr value
+ * @param ramp_factor how aggressively to ramp
  * @return the next arr value
  */
-static uint32_t Calculate_NextArr(uint8_t state, uint32_t curr_arr, uint32_t ramp_accel)
+static uint32_t Calculate_NextArr(uint8_t state, uint32_t prev_arr, uint32_t ramp_factor)
 {
     // NOTE I think my math is fine here. Testing this by just visually taking a look at motor ramp
     // ups and ramp downs.
     //
     // Constant acceleration and deceleration profile:
     // The frequency is proportional to 1/arr. I am aiming to a linear velocity profile, given a
-    // constant acceleration, ramp_accel, for that is a characteristic in the motor structs.
+    // constant acceleration, ramp_factor, for that is a characteristic in the motor structs.
     // The challenge here is that I call this function on the timer interrupt so I am able to easily
     // track number of steps for position and that there are no spurious ticks (though this should
     // be avoided with preloading). Therefore, the acceleration profile must account for a non
@@ -522,8 +537,12 @@ static uint32_t Calculate_NextArr(uint8_t state, uint32_t curr_arr, uint32_t ram
     // Here's my derivation for a recursive calculation of ARR, probably pretty close to what it
     // should be.
     //
+    // Clock configs:
+    // -SYSCLK is 84 MHz,
+    // -TODO figure out what APB1 is prescaled by
+    //
     // TARGET EQUATION) ARR = ARR_prev + Delta(ARR)
-    // - ARR_prev will simply be the motor's characteristic, curr_arr.
+    // - ARR_prev will simply be the motor's characteristic, prev_arr.
     // - delta(ARR) should be a function of ARR_prev
     //
     // Eq. 1) Stepper_Frequency = Timer_Frequency / [(1 + ARR) * (1 + PSC)].
@@ -531,10 +550,11 @@ static uint32_t Calculate_NextArr(uint8_t state, uint32_t curr_arr, uint32_t ram
     // - Timer frequency is dependent on prescaling, and therefore is a motor characteristic and not
     // changed.
     // - Stepper frequency is directly proportional to rotational speed of the motor
-    // - I'm just going to drop teh "1" in 1 + ARR since this hardly adds precision, just
-    // complicates things
+    // - I'm just going to drop the "1" in 1 + ARR since this hardly adds precision, just
+    // complicates things and I'm using some approximations later on anyway
     //
-    // Eq. 2) Stepper_Frequency = C * (1 / ARR), where C = Timer_Frequency / PSC.
+    // Eq. 2) Stepper_Frequency = C * (1 / ARR), where C = Timer_Frequency / PSC. This is already
+    // configured, so C is just the TIMX freq
     // - Simplification of Eq. 1
     //
     // Eq. 4) Stepper_Frequency^2 = Previous_Stepper_Frequency^2 + (2 * RAMP_ACCEL)
@@ -549,28 +569,41 @@ static uint32_t Calculate_NextArr(uint8_t state, uint32_t curr_arr, uint32_t ram
     //
     // Eq. 5.2) ARR^2 = 1 / [(1 / Previous_ARR^2) + (2 * RAMP_ACCEL / C^2)]
     // - Isolate ARR^2
+    // - C^2 is constant and characteristic to a motor, so just bake this into a "RAMP_FACTOR" term
     //
-    // Eq. 5.3) ARR = 1 / SQRT ( [ (1 / Previous_ARR^2) + (2 * RAMP_ACCEL / C^2) ] )
+    // Eq. 5.3)
+    // ACCELERATION: ARR = 1 / SQRT ( [ (1 / Previous_ARR^2) + (2 * RAMP_FACTOR) ] )
+    // DECELERATION: ARR = 1 / SQRT ( [ (1 / Previous_ARR^2) - (2 * RAMP_FACTOR) ] )
     // - Solve for ARR, this is what I'll use
+    // - For the calculations below, lets call 1 / Previous_ARR^2 "term1"
+    // - and lets call 2 * RAMP_ACCEL / C^2 "term2"
     //
     // NOTE about overhead: My stepper motors are ~1.8 degree steps, so realistically the speed
-    // shouldn't exceed 20 steps per second. This interrupt isn't super calculation intensive and
-    // should be more than OKAY to execute ~20 times per second.
+    // shouldn't exceed 200 steps per second. This interrupt isn't super calculation intensive and
+    // should be more than OKAY to execute ~200 times per second.
+    // TODO will need to update this if I wanna microstep, which could be pretty sick
+
+    // Initialize next arr value
+    uint32_t next_arr;
+
+    // Calculate term1, 1 / Previous_ARR^2
+    uint32_t term1 =
+        (1 / (prev_arr * prev_arr)); // arr is capped to 16 bits so this should fit in a 32b
+
+    // Calculate term 2
+    uint32_t term2 = (2 * ramp_factor); // shouldn't run into overflow problem
 
     if (state == MTR_ACCELERATING)
     {
-        // ramp_accel is the ticks/second^2, in this case positive
-        // using kinematic equation for acceleration,  v = kx
-
-        uint32_t next_arr = curr_arr - 100;
+        // calculate next ARR
+        next_arr = SQRT_Approximation(term1 + term2);
 
         return next_arr;
     }
     else if (state == MTR_DECELERATING)
     {
-        // ramps_accel is the ticks/second^2, in this case negative
-
-        uint32_t next_arr = curr_arr + 100;
+        // calculate next ARR
+        next_arr = SQRT_Approximation(term1 - term2);
 
         return next_arr;
     }
@@ -688,7 +721,7 @@ static void SingleMotor_AccelerateOnTick(s_MotorStruct *motor)
 {
     // Calculate the next arr
     uint32_t next_arr_val =
-        Calculate_NextArr(motor->motor_state, motor->motor_current_arr, motor->motor_ramp_accel);
+        Calculate_NextArr(motor->motor_state, motor->motor_current_arr, motor->motor_ramp_factor);
 
     // Compare arr to the destination state. Motors can either slow to a stop (BRAKED) or to a
     // slower speed. Eventually I might make just make the destination an arr value from
@@ -772,7 +805,7 @@ static void SingleMotor_DecelerateOnTick(s_MotorStruct *motor)
 {
     // Calculate the next arr
     uint32_t next_arr_val =
-        Calculate_NextArr(motor->motor_state, motor->motor_current_arr, motor->motor_ramp_accel);
+        Calculate_NextArr(motor->motor_state, motor->motor_current_arr, motor->motor_ramp_factor);
 
     // Compare arr to the destination state. Motors can either slow to a stop (BRAKED) or to a
     // slower speed. Eventually I might make just make the destination an arr value from
