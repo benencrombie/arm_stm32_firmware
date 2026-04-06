@@ -3,14 +3,9 @@
 #include "MotorDriver.h"
 #include "PWM.h"
 #include "SysTick.h"
+#include "TheBigFSM.h"
 #include "USART.h"
 #include "stm32f446xx.h"
-
-// Debug flags dictate what is sent through UART. If you turn everything on you will get... a lot
-#define DEBUG 1
-#ifdef DEBUG
-#define DBUG_MOTORS 1
-#endif
 
 // prototypes
 static void SystemClock_Config_84MHz(void);
@@ -30,6 +25,10 @@ uint32_t ms_counter = 0;
  */
 int main(void)
 {
+    ////////////////////////////
+    // Initialize all submodules
+    ////////////////////////////
+
     // Update system clock with CMSIS function
     SystemClock_Config_84MHz();
 
@@ -50,15 +49,22 @@ int main(void)
                              // big FSM. Haven't architected what that'll look like just yet, but
                              // this is good for bringup
 
+    /////////////////
+    // Initialize FSM
+    /////////////////
+
+    FSM_Initialize();
+
+#ifdef DEBUG
+    USART2_SendString("Fully Initialized");
+#endif
+
     ////////////////////////
     // PRELOOP TESTING BLOCK
     ////////////////////////
 
     // Test out motor fsm
     Motors_StartMotor(M0, MTR_ATSPEED_MID, 100); // Set M0 to go at mid speed for 100 steps
-
-    // Test out uart
-    USART2_SendString("Fully Init'd");
 
     ////////////////////////
 
@@ -82,8 +88,11 @@ int main(void)
                 // Update motors
                 Motors_FSM_Tick1000Hz();
 
+                // Update overall system logic
+                FSM_Tick1000Hz();
+
                 // Debug testing block, every 1 second
-#if DEBUG
+#ifdef DEBUG
                 // Toggle test pin - hooked up to LED, easily shows that CPU is not hanging
                 GPIO_ToggleTestPin();
 #endif

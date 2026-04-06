@@ -48,7 +48,8 @@ s_MotorStruct MOTOR0 = {
     .motor_slow_arr          = M0_ARR_SLOWSPEED,
     .motor_mid_arr           = M0_ARR_MIDSPEED,
     .motor_fast_arr          = M0_ARR_FASTSPEED,
-    .motor_ramp_steps        = M0_RAMP_STEPS,
+    .motor_ramp_accel        = M0_RAMP_ACCEL,
+    .motor_ramp_vel          = 0,
     .motor_step_counter      = &tim2_step_counter,
 };
 s_MotorStruct MOTOR1 = {
@@ -64,7 +65,8 @@ s_MotorStruct MOTOR1 = {
     .motor_slow_arr          = M1_ARR_SLOWSPEED,
     .motor_mid_arr           = M1_ARR_MIDSPEED,
     .motor_fast_arr          = M1_ARR_FASTSPEED,
-    .motor_ramp_steps        = M1_RAMP_STEPS,
+    .motor_ramp_accel        = M1_RAMP_ACCEL,
+    .motor_ramp_vel          = 0,
     .motor_step_counter      = &tim3_step_counter,
 };
 s_MotorStruct MOTOR2 = {
@@ -80,7 +82,8 @@ s_MotorStruct MOTOR2 = {
     .motor_slow_arr          = M2_ARR_SLOWSPEED,
     .motor_mid_arr           = M2_ARR_MIDSPEED,
     .motor_fast_arr          = M2_ARR_FASTSPEED,
-    .motor_ramp_steps        = M2_RAMP_STEPS,
+    .motor_ramp_accel        = M2_RAMP_ACCEL,
+    .motor_ramp_vel          = 0,
     .motor_step_counter      = &tim4_step_counter,
 };
 s_MotorStruct MOTOR3 = {
@@ -96,7 +99,8 @@ s_MotorStruct MOTOR3 = {
     .motor_slow_arr          = M3_ARR_SLOWSPEED,
     .motor_mid_arr           = M3_ARR_MIDSPEED,
     .motor_fast_arr          = M3_ARR_FASTSPEED,
-    .motor_ramp_steps        = M3_RAMP_STEPS,
+    .motor_ramp_accel        = M3_RAMP_ACCEL,
+    .motor_ramp_vel          = 0,
     .motor_step_counter      = &tim5_step_counter,
 };
 s_MotorStruct MOTOR4 = {
@@ -112,7 +116,8 @@ s_MotorStruct MOTOR4 = {
     .motor_slow_arr          = M4_ARR_SLOWSPEED,
     .motor_mid_arr           = M4_ARR_MIDSPEED,
     .motor_fast_arr          = M4_ARR_FASTSPEED,
-    .motor_ramp_steps        = M4_RAMP_STEPS,
+    .motor_ramp_accel        = M4_RAMP_ACCEL,
+    .motor_ramp_vel          = 0,
     .motor_step_counter      = &tim2_step_counter,
 };
 s_MotorStruct MOTOR5 = {
@@ -128,7 +133,8 @@ s_MotorStruct MOTOR5 = {
     .motor_slow_arr          = M5_ARR_SLOWSPEED,
     .motor_mid_arr           = M5_ARR_MIDSPEED,
     .motor_fast_arr          = M5_ARR_FASTSPEED,
-    .motor_ramp_steps        = M5_RAMP_STEPS,
+    .motor_ramp_accel        = M5_RAMP_ACCEL,
+    .motor_ramp_vel          = 0,
     .motor_step_counter      = &tim3_step_counter,
 };
 
@@ -193,6 +199,10 @@ static void SingleMotor_StartWithDestination(s_MotorStruct *motor, uint8_t desti
             {
                 // Don't do that
                 f_illegal_motor_start = 1;
+
+#ifdef DEBUG_MOTORS
+                USART2_SendString("Tried to start motor 0, but motor 4 is running");
+#endif
             }
             break;
         }
@@ -203,6 +213,10 @@ static void SingleMotor_StartWithDestination(s_MotorStruct *motor, uint8_t desti
             {
                 // Don't do that
                 f_illegal_motor_start = 1;
+
+#ifdef DEBUG_MOTORS
+                USART2_SendString("Tried to start motor 1, but motor 5 is running");
+#endif
             }
             break;
         }
@@ -223,6 +237,10 @@ static void SingleMotor_StartWithDestination(s_MotorStruct *motor, uint8_t desti
             {
                 // Don't do that
                 f_illegal_motor_start = 1;
+
+#ifdef DEBUG_MOTORS
+                USART2_SendString("Tried to start motor 4, but motor 0 is running");
+#endif
             }
             break;
         }
@@ -233,6 +251,10 @@ static void SingleMotor_StartWithDestination(s_MotorStruct *motor, uint8_t desti
             {
                 // Don't do that
                 f_illegal_motor_start = 1;
+
+#ifdef DEBUG_MOTORS
+                USART2_SendString("Tried to start motor 5, but motor 1 is running");
+#endif
             }
             break;
         }
@@ -477,6 +499,92 @@ static bool Motors_CheckToStopTim5(void)
 }
 
 /**
+ * @brief calculate the next ARR value given the current, target, and steps
+ * @param state the motor state (accel or decel expected)
+ * @param curr_arr current arr value
+ * @param ramp_accel how aggressively to ramp
+ * @return the next arr value
+ */
+static uint32_t Calculate_NextArr(uint8_t state, uint32_t curr_arr, uint32_t ramp_accel)
+{
+    // NOTE I think my math is fine here. Testing this by just visually taking a look at motor ramp
+    // ups and ramp downs.
+    //
+    // Constant acceleration and deceleration profile:
+    // The frequency is proportional to 1/arr. I am aiming to a linear velocity profile, given a
+    // constant acceleration, ramp_accel, for that is a characteristic in the motor structs.
+    // The challenge here is that I call this function on the timer interrupt so I am able to easily
+    // track number of steps for position and that there are no spurious ticks (though this should
+    // be avoided with preloading). Therefore, the acceleration profile must account for a non
+    // linear updating time. Ideally, the next arr can be implicitly calculated from the current arr
+    // and acceleration constant, rather than time.
+    //
+    // Here's my derivation for a recursive calculation of ARR, probably pretty close to what it
+    // should be.
+    //
+    // TARGET EQUATION) ARR = ARR_prev + Delta(ARR)
+    // - ARR_prev will simply be the motor's characteristic, curr_arr.
+    // - delta(ARR) should be a function of ARR_prev
+    //
+    // Eq. 1) Stepper_Frequency = Timer_Frequency / [(1 + ARR) * (1 + PSC)].
+    // - PSC is a characteristic of the motor, and therefore is not changed
+    // - Timer frequency is dependent on prescaling, and therefore is a motor characteristic and not
+    // changed.
+    // - Stepper frequency is directly proportional to rotational speed of the motor
+    // - I'm just going to drop teh "1" in 1 + ARR since this hardly adds precision, just
+    // complicates things
+    //
+    // Eq. 2) Stepper_Frequency = C * (1 / ARR), where C = Timer_Frequency / PSC.
+    // - Simplification of Eq. 1
+    //
+    // Eq. 4) Stepper_Frequency^2 = Previous_Stepper_Frequency^2 + (2 * RAMP_ACCEL)
+    // - Simple kinematic derivation,
+    //
+    // Eq. 5) (C / ARR)^2 = (C / Previous_ARR)^2 + 2 * RAMP_ACCEL
+    // - Substituting equation for stepper frequency back in
+    //
+    // Next steps are simplifying the equation above and solving for ARR
+    // Eq. 5.1) 1 / ARR^2 = (1 / Previous_ARR^2) + (2 * RAMP_ACCEL / C^2)
+    // - Divide everything by C^2
+    //
+    // Eq. 5.2) ARR^2 = 1 / [(1 / Previous_ARR^2) + (2 * RAMP_ACCEL / C^2)]
+    // - Isolate ARR^2
+    //
+    // Eq. 5.3) ARR = 1 / SQRT ( [ (1 / Previous_ARR^2) + (2 * RAMP_ACCEL / C^2) ] )
+    // - Solve for ARR, this is what I'll use
+    //
+    // NOTE about overhead: My stepper motors are ~1.8 degree steps, so realistically the speed
+    // shouldn't exceed 20 steps per second. This interrupt isn't super calculation intensive and
+    // should be more than OKAY to execute ~20 times per second.
+
+    if (state == MTR_ACCELERATING)
+    {
+        // ramp_accel is the ticks/second^2, in this case positive
+        // using kinematic equation for acceleration,  v = kx
+
+        uint32_t next_arr = curr_arr - 100;
+
+        return next_arr;
+    }
+    else if (state == MTR_DECELERATING)
+    {
+        // ramps_accel is the ticks/second^2, in this case negative
+
+        uint32_t next_arr = curr_arr + 100;
+
+        return next_arr;
+    }
+    else
+    {
+// Shouldn't happen
+#ifdef DEBUG_MOTORS
+        USART2_SendString("Calculating next arr for unexpected state (not accel or decel)");
+#endif
+        return 0;
+    }
+}
+
+/**
  * Public API
  *
  * These are operations that are accessible from the mainloop/FSM.  Eventually, these will be made
@@ -501,6 +609,10 @@ void Motors_DisableAll(void)
 
     // Transition into disabled state
     motor_system_state = MTRSYS_DISABLED;
+
+#ifdef DEBUG_MOTORS
+    USART2_SendString("Disabled all motors");
+#endif
 }
 
 /**
@@ -539,6 +651,10 @@ void Motors_RampDownAll(void)
 
     // Transition into ramp down state
     motor_system_state = MTRSYS_RAMP_DOWN;
+
+#ifdef DEBUG_MOTORS
+    USART2_SendString("Ramping down all motors");
+#endif
 }
 
 /**
@@ -552,7 +668,8 @@ void Motors_FSM_Initialize(void)
     Motors_EnableAll();
 
     // Kick off the fsm by jumping into BRAKED
-    motor_system_state = MTRSYS_RUNNING; // TODO change to braked when done testing
+    motor_system_state =
+        MTRSYS_RUNNING; // TODO change to braked to perform initialization tasks when done testing
 }
 
 /**
@@ -569,12 +686,13 @@ void Motors_FSM_Initialize(void)
  */
 static void SingleMotor_AccelerateOnTick(s_MotorStruct *motor)
 {
-    // TODO do like the same thing from the decel tick but for accel
+    // Calculate the next arr
+    uint32_t next_arr_val =
+        Calculate_NextArr(motor->motor_state, motor->motor_current_arr, motor->motor_ramp_accel);
 
-    // Calculate the new ARR to increase speed TODO
-    next_arr_val = 999;
-
-    // Compare arr to that of the destination state
+    // Compare arr to the destination state. Motors can either slow to a stop (BRAKED) or to a
+    // slower speed. Eventually I might make just make the destination an arr value from
+    // analog/joystick input
     switch (motor->motor_destination_state)
     {
         case MTR_BRAKED:
@@ -593,6 +711,9 @@ static void SingleMotor_AccelerateOnTick(s_MotorStruct *motor)
 
                 // Change the motor state to at speed
                 motor->motor_state = MTR_ATSPEED_SLOW;
+
+                // Change the current ramp vel
+                motor->motor_ramp_vel = 0;
             }
             else
             {
@@ -611,6 +732,9 @@ static void SingleMotor_AccelerateOnTick(s_MotorStruct *motor)
 
                 // Change the motor state to at speed
                 motor->motor_state = MTR_ATSPEED_MID;
+
+                // Change the current ramp vel
+                motor->motor_ramp_vel = 0;
             }
             break;
         }
@@ -625,6 +749,9 @@ static void SingleMotor_AccelerateOnTick(s_MotorStruct *motor)
 
                 // Change the motor state to at speed
                 motor->motor_state = MTR_ATSPEED_FAST;
+
+                // Change the current ramp vel
+                motor->motor_ramp_vel = 0;
             }
             break;
         }
@@ -643,8 +770,9 @@ static void SingleMotor_AccelerateOnTick(s_MotorStruct *motor)
  */
 static void SingleMotor_DecelerateOnTick(s_MotorStruct *motor)
 {
-    // Calculate the new arr to reduce speed TODO
-    next_arr_val = 999;
+    // Calculate the next arr
+    uint32_t next_arr_val =
+        Calculate_NextArr(motor->motor_state, motor->motor_current_arr, motor->motor_ramp_accel);
 
     // Compare arr to the destination state. Motors can either slow to a stop (BRAKED) or to a
     // slower speed. Eventually I might make just make the destination an arr value from
@@ -861,8 +989,8 @@ void Motors_FSM_Tick1000Hz(void)
 /**
  * ISR functions
  *
- * ISR handlers for TIM2, TIM3, TIM4, and TIM5. Each clears the flag and increments the tracked step
- * counter
+ * IRQ handlers for TIM2, TIM3, TIM4, and TIM5. Each clears the flag and increments the tracked
+ * step counter
  */
 
 /**
