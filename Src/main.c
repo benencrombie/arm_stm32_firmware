@@ -64,7 +64,9 @@ int main(void)
     ////////////////////////
 
     // Test out motor fsm
-    Motors_StartMotor(M0, MTR_ATSPEED_MID, 100); // Set M0 to go at mid speed for 100 steps
+    // Set M0 to go at 99 arr speed for 100 steps
+    // PWM freq prescaled down to 10 kHz, so this is 100 ticks/second (0.5 rev/s)
+    // Motors_StartMotor(M0, 99, 100);
 
     ////////////////////////
 
@@ -155,8 +157,9 @@ static void SystemClock_Config_84MHz(void)
      * Peripheral bus clocks
      *
      * HCLK = 84 MHz
-     * PCLK1 = 21 MHz
-     * APB2 = 84 MHz
+     * APB1 (PCLK1) = 5.25 MHz
+     * - Motor PWMs (TIM2, TIM3, TIM4, TIM5)
+     * APB2 (PCLK2) = 84 MHz
      * SYSCLK = 84 MHz
      */
 
@@ -164,9 +167,10 @@ static void SystemClock_Config_84MHz(void)
     RCC->CFGR &= ~RCC_CFGR_HPRE;
     RCC->CFGR |= RCC_CFGR_HPRE_DIV1;
 
-    // APB1, prescale by /4, so PCLK1 = 21 MHz. Arbitrarily chosen
+    // APB1, prescale by /16, so PCLK1 = 5.25 MHz. Using these for motor timers, so not super high
+    // speed
     RCC->CFGR &= ~RCC_CFGR_PPRE1;
-    RCC->CFGR |= RCC_CFGR_PPRE1_DIV4;
+    RCC->CFGR |= RCC_CFGR_PPRE1_DIV16;
 
     // APB2, prescale by /1, so PCLK2 = 84 MHz
     RCC->CFGR &= ~RCC_CFGR_PPRE2;

@@ -10,6 +10,7 @@
 #include "main.h"
 
 // GPIOA/B/C clocks are already enabled
+// APB1 clock prescaled by 16, so it is 5.25 MHz
 
 /**
  * @brief init timer 2 for pwm
@@ -26,7 +27,7 @@ static void PWM_Init_TIM2(void)
     RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
 
     // Speed is predetermined by PSC and ARR.
-    // Frequency of the PWM is proportional to 1 / [(PSC + 1) * (ARR + 1)]
+    // Frequency of the PWM is 5.25 MHz / [(PSC + 1) * (ARR + 1)]
     // So higher the higher the PSC/ARR values are, the slower it goes
     // Keeping PSC pinned for each timer. Speed will be updated with ARR since they have the same
     // affect
