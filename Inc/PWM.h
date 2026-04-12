@@ -18,9 +18,7 @@
 #define TIM5_PRESC 524 // 5.25 MHz / (524 + 1) ~ 10,000 Hz
 
 #define MAX_ARR 65535
-#define MIN_ARR                                                                                    \
-    1023 // TODO find a good min for the motors. Working with 1.8 degree steps and 19x gear
-         // reductions on the mechanical side
+#define MIN_ARR 19 // this is the fastest a motor should go, 10 kHz / 20 = 500 ticks/second
 
 void PWM_Initialize(void);
 void PWM_EnableChannel(e_MotorNum motor_number);

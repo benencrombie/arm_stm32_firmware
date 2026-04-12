@@ -15,7 +15,8 @@
 // reductions for each cycloidal gearbox ranging from 19x to ... idk yet lol
 // Frequency = F / [(PSC + 1) * (ARR + 1)]
 
-#define MIN_MOTOR_ARR 19 // this is the fastest a motor should go, 10 kHz / 20 = 500 ticks/second
+#define LEEWAY_TICKS                                                                               \
+    5 // Number of ticks to ensure that the motor reaches approach speed before target
 
 // Motor 0 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
 #define M0_APPROACH_ARR 10000
@@ -78,8 +79,10 @@ typedef enum
 typedef struct
 {
     e_MotorNum motor_num;          // motor enum
+    uint32_t motor_base_freq;      // base frequency, after PSC but before ARR is applied
     e_MotorState motor_state;      // motor state, enum is above this
     uint16_t motor_target_arr;     // how fast I want the motor to go (f = 1/arr)
+    uint32_t motor_curr_arr;       // current arr, for tracking and checking states
     uint16_t motor_target_steps;   // how many steps I command the motor to take
     uint8_t motor_en_pin;          // enable pin
     uint8_t motor_dir_pin;         // direction pin
@@ -88,6 +91,8 @@ typedef struct
     uint16_t motor_approach_arr;   // approach arr
     uint16_t motor_ramp_ms;        // milliseconds to ramp up or down fully
     uint16_t motor_ramp_ticks;     // number of ticks to ramp, calculated with a static function
+    uint16_t motor_start_decel;    // the tick number to start decelerating, called on interrupt
+    volatile uint8_t *motor_decel_flag; // pointer to deceleration flag
 } s_MotorStruct;
 
 // Prototypes
