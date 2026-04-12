@@ -9,6 +9,11 @@
 #include "GPIO.h"
 #include "main.h"
 
+// TODO eventually use USART1 for SBC comms
+
+// Prototypes
+static void USART2_LoadByteToDR();
+
 // Inits
 s_USART2_TxBuffer USART2_TxRingBuf; // USART2 for debugging
 
@@ -19,11 +24,16 @@ s_USART2_TxBuffer USART2_TxRingBuf; // USART2 for debugging
  */
 static void USART2_Initialize(void)
 {
-    // NOTE USart is on the APB1 bus clock (PCLK), which is the low speed peripheral clock.
-    // I prescale by 4, making this clock 21 MHz
+    // NOTE USART is on the APB1 bus clock (PCLK), which is the low speed peripheral clock.
+    // I prescale by 16, making this clock 5.25 MHz
+
+    // Set buffer indices
+    USART2_TxRingBuf.head_write = 0;
+    USART2_TxRingBuf.tail_tx    = 0;
 
     // Enable USART2 clock on the APB1
     RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
+    (void)RCC->APB1ENR; // read back
 
     // Refer to 38.8, page 1260, USART registers. Reset value is all registers cleared, but am
     // redundantly clearing pins just to make sure nothing weird happens if I re-init
@@ -32,26 +42,21 @@ static void USART2_Initialize(void)
     USART2->CR3 = 0;
 
     // [39.8.4] Configure baud rate
-    // PCLK is 84 MHz. OVER8 is cleared
+    // PCLK1 is 84 MHz / 16, so 5.25 MHz. OVER8 is cleared
     // I'm targetting a baud of 115200
-    // Baud = PCLK1 / USARTDIV -> USARTDIV = PCLK / Baud
+    // Baud = PCLK1 / USARTDIV -> USARTDIV = PCLK1 / Baud
     // NOTE if I swap to oversampling by 8, Baud = 2 * PCLK1 / USARTDIV
-    // Therefore, the BRR register should be set to 21000000 / 115200 = 182.29166 (repeating)
-    // USARTDIV = Mantissa + (frac/16)
-    // Bits 15:4 is the mantissa
-    // Bits 3:0 is the fraction (x16 since OVER8 is cleared).
-    USART2->BRR = (182 << 4) | 5;
+    // Therefore, the BRR register should be set to 5250000 / 115200
+    USART2->BRR = 5250000 / 115200; // Don't overthink or change this
 
     // Configure NVIC for interrupts
     NVIC_EnableIRQ(USART2_IRQn);
 
     // Bit 3: TE, enable the TX
-    USART2->CR1 |= USART_CR1_TE;
-
-    // I don't think I need to touch CR2 or CR3?
+    USART2->CR1 = USART_CR1_TE;
 
     // [39.8.1] Enable USART again
-    USART2->CR1 |= USART_CR1_UE; // 1 is enable
+    USART2->CR1 |= USART_CR1_UE;
 }
 
 /**
@@ -61,7 +66,10 @@ static void USART2_Initialize(void)
  */
 void USART_Initialize(void)
 {
+    // Init USART1
+    // Init USART2
     USART2_Initialize();
+    /// Init USART3?
 }
 
 /**
@@ -84,51 +92,17 @@ static bool USART2_AddByteToQueue(uint8_t data_byte)
         return false;
     }
 
-    else
-    {
-        // Update the ring buffer with the new byte if not full
-        USART2_TxRingBuf.buffer[USART2_TxRingBuf.head_write] = data_byte;
+    // Update the ring buffer with the new byte if not full
+    USART2_TxRingBuf.buffer[USART2_TxRingBuf.head_write] = data_byte;
 
-        // Increment the write index because a new byte has been added
-        USART2_TxRingBuf.head_write = next_write_idx;
+    // Increment the write index because a new byte has been added
+    USART2_TxRingBuf.head_write = next_write_idx;
 
-        // [39.8.1], Bit 7: TXEIE, enable the ineterrupt so TX starts firing stuff
-        USART2->CR1 |= USART_CR1_TXEIE; // 1 is enable
-
-        return true;
-    }
+    // [39.8.1], Bit 7: TXEIE, enable the ineterrupt so TX starts firing stuff
+    USART2->CR1 |= USART_CR1_TXEIE; // 1 is enable
 
     // fall back in case I build out more
     return true;
-}
-
-/**
- * @brief function to load byte into the DR register. NOTE that newer stms use a TDR/RDR register to
- * split tx and rx, but I'm using an F446 that just uses a single data register. This module is not
- * portable to newer stms and will need to change
- * @param void
- * @return void
- */
-static void USART2_LoadByteToDR(void)
-{
-    // First check of the TXE register is empty
-    if (USART2->SR & USART_SR_TXE)
-    {
-        // If tail is equal to head, then the queue is empty
-        if (USART2_TxRingBuf.head_write != USART2_TxRingBuf.tail_tx)
-        {
-            // Write the next byte to the data register to start tarnsmission on interrupt
-            USART2->DR = USART2_TxRingBuf.buffer[USART2_TxRingBuf.tail_tx];
-
-            // Increment the tail
-            USART2_TxRingBuf.tail_tx = (USART2_TxRingBuf.tail_tx + 1) % USART2_TX_BUFFER_SIZE;
-        }
-        else
-        {
-            // Queue is empty, disable the interrupt until data is added again
-            USART2->CR1 &= ~USART_CR1_TXEIE;
-        }
-    }
 }
 
 /**
@@ -153,5 +127,24 @@ void USART2_SendString(char *str)
  */
 void USART_USART2_IRQHandler(void)
 {
-    USART2_LoadByteToDR();
+    if (USART2->SR & USART_SR_TXE)
+    {
+        if (USART2_TxRingBuf.head_write != USART2_TxRingBuf.tail_tx)
+        {
+            // Write directly here, bypassing LoadByteToDR
+            USART2->DR               = USART2_TxRingBuf.buffer[USART2_TxRingBuf.tail_tx];
+            USART2_TxRingBuf.tail_tx = (USART2_TxRingBuf.tail_tx + 1) % USART2_TX_BUFFER_SIZE;
+        }
+
+        // Disable if buffer now empty
+        if (USART2_TxRingBuf.head_write == USART2_TxRingBuf.tail_tx)
+        {
+            USART2->CR1 &= ~USART_CR1_TXEIE;
+        }
+    }
+
+    if (USART2->SR & USART_SR_TC)
+    {
+        USART2->SR &= ~USART_SR_TC;
+    }
 }

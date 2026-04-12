@@ -34,21 +34,21 @@ void SystemCoreClockUpdate(void);
  * Each motor has an EN, DIR, and STEP
  */
 
-#define MTR_EN_PORT GPIOA // Just use the same port for all ENs for simplicity
-#define MTR0_EN_PIN 0
-#define MTR1_EN_PIN 0
-#define MTR2_EN_PIN 0
-#define MTR3_EN_PIN 0
-#define MTR4_EN_PIN 0
-#define MTR5_EN_PIN 0
+#define MTR_EN_PORT GPIOC // Just use the same port for all ENs for simplicity
+#define MTR0_EN_PIN 0     // PC0
+#define MTR1_EN_PIN 1     // PC1
+#define MTR2_EN_PIN 2     // PC2
+#define MTR3_EN_PIN 13    // PC13
+#define MTR4_EN_PIN 14    // PC14
+#define MTR5_EN_PIN 15    // PC15
 
 #define MTR_DIR_PORT GPIOB // Just use the same port for all DIRs for simplicity
-#define MTR0_DIR_PIN 0
-#define MTR1_DIR_PIN 0
-#define MTR2_DIR_PIN 0
-#define MTR3_DIR_PIN 0
-#define MTR4_DIR_PIN 0
-#define MTR5_DIR_PIN 0
+#define MTR0_DIR_PIN 3     // PB3
+#define MTR1_DIR_PIN 4     // PB4
+#define MTR2_DIR_PIN 5     // PB5
+#define MTR3_DIR_PIN 13    // PB13
+#define MTR4_DIR_PIN 14    // PB14
+#define MTR5_DIR_PIN 15    // PB15
 
 /**
  * USARTs:

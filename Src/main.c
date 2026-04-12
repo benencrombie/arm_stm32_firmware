@@ -49,6 +49,9 @@ int main(void)
                              // big FSM. Haven't architected what that'll look like just yet, but
                              // this is good for bringup
 
+    // Enable interrupts
+    __enable_irq();
+
     /////////////////
     // Initialize FSM
     /////////////////
@@ -56,7 +59,7 @@ int main(void)
     FSM_Initialize();
 
 #ifdef DEBUG
-    USART2_SendString("Fully Initialized");
+    USART2_SendString("Fully Initialized\r\n");
 #endif
 
     ////////////////////////
@@ -66,7 +69,7 @@ int main(void)
     // Test out motor fsm
     // Set M0 to go at 99 arr speed for 100 steps
     // PWM freq prescaled down to 10 kHz, so this is 100 ticks/second (0.5 rev/s)
-    // Motors_StartMotor(M0, 99, 100);
+    Motors_StartMotor(M0, 99, 400);
 
     ////////////////////////
 
@@ -81,17 +84,23 @@ int main(void)
             // Increment ms counter
             ms_counter++;
 
+            // Update motors
+            Motors_FSM_Tick1000Hz();
+
+            // Update overall system logic
+            FSM_Tick1000Hz();
+
+            ////////////////////////
+            // 1000 HZ TESTING BLOCK
+            ////////////////////////
+
+            ////////////////////////
+
             // Every 1 second (1000 ms)
             if (ms_counter == 1000)
             {
                 // Reset counter
                 ms_counter = 0;
-
-                // Update motors
-                Motors_FSM_Tick1000Hz();
-
-                // Update overall system logic
-                FSM_Tick1000Hz();
 
                 // Debug testing block, every 1 second
 #ifdef DEBUG
@@ -99,7 +108,7 @@ int main(void)
                 GPIO_ToggleTestPin();
 #endif
                 ////////////////////////
-                // 1000 HZ TESTING BLOCK
+                // 1 HZ TESTING BLOCK
                 ////////////////////////
 
                 ////////////////////////
