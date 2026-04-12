@@ -58,7 +58,7 @@ s_MotorStruct MOTOR0 = {
     .motor_approach_arr = M0_APPROACH_ARR,
     .motor_ramp_ms      = M0_RAMP_MS,
     .motor_ramp_ticks   = 0,
-    .motor_start_decel  = 5000, // Calculated in init, todo change from 5000 to 0
+    .motor_start_decel  = 0, // Calculated in init
     .motor_decel_flag   = &f_m0_decel,
 };
 s_MotorStruct MOTOR1 = {
@@ -75,7 +75,7 @@ s_MotorStruct MOTOR1 = {
     .motor_approach_arr = M1_APPROACH_ARR,
     .motor_ramp_ms      = M1_RAMP_MS,
     .motor_ramp_ticks   = 0,
-    .motor_start_decel  = 5000, // Calculated in init
+    .motor_start_decel  = 0, // Calculated in init
     .motor_decel_flag   = &f_m1_decel,
 };
 s_MotorStruct MOTOR2 = {
@@ -92,7 +92,7 @@ s_MotorStruct MOTOR2 = {
     .motor_approach_arr = M2_APPROACH_ARR,
     .motor_ramp_ms      = M2_RAMP_MS,
     .motor_ramp_ticks   = 0,
-    .motor_start_decel  = 5000, // Calculated in init
+    .motor_start_decel  = 0, // Calculated in init
     .motor_decel_flag   = &f_m2_decel,
 };
 s_MotorStruct MOTOR3 = {
@@ -109,7 +109,7 @@ s_MotorStruct MOTOR3 = {
     .motor_approach_arr = M3_APPROACH_ARR,
     .motor_ramp_ms      = M3_RAMP_MS,
     .motor_ramp_ticks   = 0,
-    .motor_start_decel  = 5000, // Calculated in init
+    .motor_start_decel  = 0, // Calculated in init
     .motor_decel_flag   = &f_m3_decel,
 };
 s_MotorStruct MOTOR4 = {
@@ -126,7 +126,7 @@ s_MotorStruct MOTOR4 = {
     .motor_approach_arr = M4_APPROACH_ARR,
     .motor_ramp_ms      = M4_RAMP_MS,
     .motor_ramp_ticks   = 0,
-    .motor_start_decel  = 5000, // Calculated in init
+    .motor_start_decel  = 0, // Calculated in init
     .motor_decel_flag   = &f_m4_decel,
 };
 s_MotorStruct MOTOR5 = {
@@ -143,7 +143,7 @@ s_MotorStruct MOTOR5 = {
     .motor_approach_arr = M5_APPROACH_ARR,
     .motor_ramp_ms      = M5_RAMP_MS,
     .motor_ramp_ticks   = 0,
-    .motor_start_decel  = 5000, // Calculated in init
+    .motor_start_decel  = 0, // Calculated in init
     .motor_decel_flag   = &f_m5_decel,
 };
 
@@ -169,8 +169,23 @@ static void SingleMotor_CalculateDecelDist(s_MotorStruct *motor)
     // called LEEWAY_TICKS
 
     // This is built for a linear ramp profile, so we can calculate an integral of speed using avg
-    // speed = (v0 + vf) / 2 Number of steps is the integral of this with respect to time, so steps
+    // speed = (v0 + vf) / 2. Number of steps is the integral of this with respect to time, so steps
     // = (v0 + vf) / 2 * ramp_ms. Check units between vel. and ms
+
+    // v0 is the target speed, base frequency / (1 + arr), but im just simplifying to 1/arr
+    uint32_t v0 = motor->motor_base_freq / (uint32_t)motor->motor_target_arr; // steps/sec
+
+    // vf is the approaching speed
+    uint32_t vf = motor->motor_base_freq / (uint32_t)motor->motor_approach_arr; // steps/sec
+
+    // Get average speed
+    uint32_t avg_speed = (v0 + vf) / 2; // steps/sec
+
+    // Calculate total steps, avg speed * time * [1/1000 (sec/ms)]
+    uint32_t steps_to_decel = avg_speed * (uint32_t)motor->motor_ramp_ms / 1000;
+
+    // Set the decel step count
+    motor->motor_start_decel = motor->motor_target_steps - (uint16_t)steps_to_decel;
 }
 
 /**
