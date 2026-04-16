@@ -7,6 +7,10 @@
 
 #include "main.h"
 
+// Payload defines
+#define COMMAND_PREAMBLE  (0x1111)
+#define COMMAND_POSTAMBLE (0x9999)
+
 // Enum FSM states
 
 // Enum FSM events

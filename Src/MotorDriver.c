@@ -10,21 +10,25 @@ prevents there being a desync between the timer and 1000 Hz ticker.
 
 #include "MotorDriver.h"
 #include "GPIO.h"
-#include "MathModules.h"
 #include "PWM.h"
 #include "USART.h"
 #include "main.h"
 
 // TODOs
-// I'm not 100% sure but the FSM will probably break if you pass a small target steps in, since
-// steps are controlled by the interrupt and actual accel/decel is controlled by time. Probably will
-// be a headache to build out, so maybe mitigate this in the UART comms (from raspberry pi)
+// I haven't thought about it yuet but the FSM will probably break if you pass a small target steps
+// in, since steps are controlled by the interrupt and actual accel/decel is controlled by time.
+// Probably will be a headache to build out, so maybe mitigate this in the UART comms (from
+// raspberry pi). Consider adding a single step command to nudge the motor a tick without a
+// specified speed
 
 // Prototypes
+static void Motors_Comms_MotorActive(uint8_t motor);
+static void Motors_Comms_MotorInactive(uint8_t motor);
 
 // Overall motor actuation system state
 e_MotorSystemState motor_system_state =
-    MTRSYS_RUNNING; // TODO Start at DISABLED, jumping straight to RUNNING for testing purposes
+    MTRSYS_RUNNING; // TODO Start at DISABLED then make a condition to enable, jumping straight to
+                    // RUNNING for testing purposes
 
 // Timer step counter
 volatile uint32_t tim2_step_counter = 0;
@@ -161,6 +165,9 @@ s_MotorStruct MOTOR5 = {
  */
 static void SingleMotor_CalculateDecelDist(s_MotorStruct *motor)
 {
+    // TODO TODO TODO this is fine, but this needs to be calculated after a motor's target_arr is
+    // set (when it starts), otherwise target_arr is just 0. Change this
+
     // Trigger the deceleration tick. Frame this as motor_target_steps - steps_to_go
     // Variables we have are base frequency, total steps, target arr, approaching arr, and ramp ms
     // (milliseconds), so we need to see how many ticks are in motor_ramp_ms. There should be some
@@ -214,8 +221,8 @@ static void SingleMotor_Enable(s_MotorStruct *motor)
     // will be handled elsewhere
     motor->motor_state = MTR_BRAKED;
 
-    // Set en pin
-    GPIO_Set(MTR_EN_PORT, motor->motor_en_pin);
+    // Clear en pin, pull low to enable motors
+    GPIO_Clear(MTR_EN_PORT, motor->motor_en_pin);
 }
 
 /**
@@ -244,8 +251,12 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint32_t target_ar
                 f_illegal_motor_start = 1;
 
 #ifdef DEBUG_MOTORS
-                USART2_SendString("Tried to start motor 0, but motor 4 is running");
+                USART2_SendString("Tried to start motor 0, but motor 4 is running\r\n");
 #endif
+            }
+            else
+            {
+                tim2_step_counter = 0;
             }
             break;
         }
@@ -258,19 +269,25 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint32_t target_ar
                 f_illegal_motor_start = 1;
 
 #ifdef DEBUG_MOTORS
-                USART2_SendString("Tried to start motor 1, but motor 5 is running");
+                USART2_SendString("Tried to start motor 1, but motor 5 is running\r\n");
 #endif
+            }
+            else
+            {
+                tim3_step_counter = 0;
             }
             break;
         }
         case M2:
         {
             /* no op. ur good */
+            tim4_step_counter = 0;
             break;
         }
         case M3:
         {
             /* no op. ur good */
+            tim5_step_counter = 0;
             break;
         }
         case M4:
@@ -282,8 +299,12 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint32_t target_ar
                 f_illegal_motor_start = 1;
 
 #ifdef DEBUG_MOTORS
-                USART2_SendString("Tried to start motor 4, but motor 0 is running");
+                USART2_SendString("Tried to start motor 4, but motor 0 is running\r\n");
 #endif
+            }
+            else
+            {
+                tim2_step_counter = 0;
             }
             break;
         }
@@ -296,8 +317,12 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint32_t target_ar
                 f_illegal_motor_start = 1;
 
 #ifdef DEBUG_MOTORS
-                USART2_SendString("Tried to start motor 5, but motor 1 is running");
+                USART2_SendString("Tried to start motor 5, but motor 1 is running\r\n");
 #endif
+            }
+            else
+            {
+                tim3_step_counter = 0;
             }
             break;
         }
@@ -315,8 +340,17 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint32_t target_ar
         // Tell the motor how many steps to go
         motor->motor_target_steps = target_steps;
 
-        // Actually set the arr to the max value (slowest speed)
-        SingleMotor_SetArr(motor, MAX_ARR);
+        // Ensure the decel flag is cleared
+        *(motor->motor_decel_flag) = 0;
+
+        // Set the decel distance
+        SingleMotor_CalculateDecelDist(motor);
+
+        // Clear the ramp ticks
+        motor->motor_ramp_ticks = 0;
+
+        // Actually set the arr to the approach arr (slowest speed)
+        SingleMotor_SetArr(motor, motor->motor_approach_arr);
 
         // Enable the PWM channel
         PWM_EnableChannel(motor->motor_num);
@@ -336,6 +370,10 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint32_t target_ar
  */
 void Motors_StartMotor(uint8_t motor_num, uint32_t arr, uint16_t number_of_steps)
 {
+#ifdef DEBUG_MOTORS
+    USART2_SendString("Starting a motor\r\n");
+#endif
+
     uint32_t motor_arr = arr;
 
     // Just check the bounds, don't wanna go to fast
@@ -374,8 +412,8 @@ void Motors_StartMotor(uint8_t motor_num, uint32_t arr, uint16_t number_of_steps
  */
 static void SingleMotor_Disable(s_MotorStruct *motor)
 {
-    // Clear en pin
-    GPIO_Clear(MTR_EN_PORT, motor->motor_en_pin);
+    // Set en pin to disable
+    GPIO_Set(MTR_EN_PORT, motor->motor_en_pin);
 
     // Disable PWM channel. There is no situation to have PWM on but the EN cleared
     PWM_DisableChannel(motor->motor_num);
@@ -412,7 +450,7 @@ void Motors_DisableAll(void)
     motor_system_state = MTRSYS_DISABLED;
 
 #ifdef DEBUG_MOTORS
-    USART2_SendString("Disabled all motors");
+    USART2_SendString("Disabled all motors\r\n");
 #endif
 }
 
@@ -442,19 +480,12 @@ void Motors_EnableAll(void)
  */
 void Motors_RampDownAll(void)
 {
-    // Set all motor states to decel
-    MOTOR0.motor_state = MTR_DECELERATING;
-    MOTOR1.motor_state = MTR_DECELERATING;
-    MOTOR2.motor_state = MTR_DECELERATING;
-    MOTOR3.motor_state = MTR_DECELERATING;
-    MOTOR4.motor_state = MTR_DECELERATING;
-    MOTOR5.motor_state = MTR_DECELERATING;
-
-    // If decelerating there is not target arr, just go til you are at approaching speed (handled
-    // elsewhere)
+    // I don't know if I want to include this, might be difficult to pull off if motors are mid
+    // ramp... This can be used as like a "Pause" call, but I need to figure out how to keep track
+    // of position and other parameters.
 
 #ifdef DEBUG_MOTORS
-    USART2_SendString("Ramping down all motors");
+    USART2_SendString("(NOT COMPLETE YET) Ramping down all motors\r\n");
 #endif
 }
 
@@ -465,15 +496,6 @@ void Motors_RampDownAll(void)
  */
 void Motors_FSM_Initialize(void)
 {
-    // Calculate the decel distances for each motor, this is not clean to do when declaring
-    // variables TODO TODO TODO
-    SingleMotor_CalculateDecelDist(&MOTOR0);
-    SingleMotor_CalculateDecelDist(&MOTOR1);
-    SingleMotor_CalculateDecelDist(&MOTOR2);
-    SingleMotor_CalculateDecelDist(&MOTOR3);
-    SingleMotor_CalculateDecelDist(&MOTOR4);
-    SingleMotor_CalculateDecelDist(&MOTOR5);
-
     // Enable all motors. Whether a motor moves or not is dictated by the PWM channel, not this
     Motors_EnableAll();
 
@@ -501,11 +523,14 @@ static void SingleMotor_HandleStateTransition(s_MotorStruct *motor)
     switch (motor->motor_state)
     {
         case MTR_NONE:
-        // Wait to do something
+            // Wait to do something
+            break;
         case MTR_DISABLED:
-        // Wait to do something
+            // Wait to do something
+            break;
         case MTR_BRAKED:
-        // Wait to do something
+            // Wait to do something
+            break;
         case MTR_ACCELERATING:
             // Acceleration is handled only by time, so just need to check ramping
             if (motor->motor_ramp_ticks > motor->motor_ramp_ms)
@@ -518,7 +543,11 @@ static void SingleMotor_HandleStateTransition(s_MotorStruct *motor)
 
                 // Ensure that the tick is at max for future deceleration
                 motor->motor_ramp_ticks = motor->motor_ramp_ms;
+#ifdef DEBUG_MOTORS
+                USART2_SendString("ATSPEED\r\n");
+#endif
             }
+            break;
 
         case MTR_DECELERATING:
             // Transition into an approach state when the ramp down is complete, this will be
@@ -532,7 +561,12 @@ static void SingleMotor_HandleStateTransition(s_MotorStruct *motor)
                 // Set state to appraoching, where last positions are controlled by the interrupt
                 // rather than time
                 motor->motor_state = MTR_APPROACH;
+
+#ifdef DEBUG_MOTORS
+                USART2_SendString("APPROACHING\r\n");
+#endif
             }
+            break;
 
         case MTR_ATSPEED:
             // Dereference the motor flag and see if its up
@@ -543,11 +577,17 @@ static void SingleMotor_HandleStateTransition(s_MotorStruct *motor)
 
                 // Clear the flag
                 *(motor->motor_decel_flag) = 0;
+
+#ifdef DEBUG_MOTORS
+                USART2_SendString("DECELERATING\r\n");
+#endif
             }
+            break;
 
         case MTR_APPROACH:
             // Logic for approaching is handled in the interrupt itself for precise precisioning.
             // This is not intensive at the rate at which the timer will tick for approach speed
+            break;
     }
 }
 
@@ -577,7 +617,7 @@ static void SingleMotor_AccelerateOnTick(s_MotorStruct *motor)
     uint32_t t    = motor->motor_ramp_ticks;
     uint32_t T    = motor->motor_ramp_ms;
     uint32_t At   = motor->motor_target_arr;
-    uint32_t Amax = MAX_ARR;
+    uint32_t Amax = motor->motor_approach_arr;
 
     // Use 64b to avoid overflow
     uint64_t numerator   = (uint64_t)At * Amax * T;
@@ -650,6 +690,7 @@ static void SingleMotor_UpdateOnTick(s_MotorStruct *motor)
         case MTR_NONE:
         {
             // No op for the motor
+            break;
         }
         case MTR_DISABLED:
         {
@@ -759,6 +800,12 @@ void Motors_TIM2_IRQHandler(void)
     // Increment step counter
     tim2_step_counter++;
 
+#ifdef DEBUG_INTERRUPT_TIMERS
+    USART2_SendString("TIM2:");
+    USART2_SendInt32(tim2_step_counter);
+    USART2_SendString("\r\n");
+#endif
+
     // Look if either motor is approaching, then check to stop
     if (MOTOR0.motor_state == MTR_APPROACH)
     {
@@ -780,6 +827,9 @@ void Motors_TIM2_IRQHandler(void)
         // Check to raise the decel flag
         if (tim2_step_counter >= MOTOR0.motor_start_decel)
         {
+#ifdef DEBUG_MOTORS
+            USART2_SendString("M0 Decel");
+#endif
             f_m0_decel = 1;
         }
     }
@@ -803,6 +853,9 @@ void Motors_TIM2_IRQHandler(void)
         // Check to raise the decel flag
         if (tim2_step_counter >= MOTOR4.motor_start_decel)
         {
+#ifdef DEBUG_MOTORS
+            USART2_SendString("M4 Decel");
+#endif
             f_m4_decel = 1;
         }
     }
@@ -821,17 +874,23 @@ void Motors_TIM3_IRQHandler(void)
     // Increment step counter
     tim3_step_counter++;
 
+#ifdef DEBUG_INTERRUPT_TIMERS
+    USART2_SendString("TIM3:");
+    USART2_SendInt32(tim3_step_counter);
+    USART2_SendString("\r\n");
+#endif
+
     // Look if either motor is approaching, then check to stop
     if (MOTOR1.motor_state == MTR_APPROACH)
     {
         // Compare the step to target step
-        if (tim2_step_counter >= MOTOR1.motor_target_steps)
+        if (tim3_step_counter >= MOTOR1.motor_target_steps)
         {
             // Stop the motor, don't touch the en pin though
             PWM_DisableChannel(MOTOR1.motor_num);
 
             // reset the counter
-            tim2_step_counter = 0;
+            tim3_step_counter = 0;
 
             // Make motor braked
             MOTOR1.motor_state = MTR_BRAKED;
@@ -840,21 +899,24 @@ void Motors_TIM3_IRQHandler(void)
     else if (MOTOR1.motor_state == MTR_ATSPEED)
     {
         // Check to raise the decel flag
-        if (tim2_step_counter >= MOTOR1.motor_start_decel)
+        if (tim3_step_counter >= MOTOR1.motor_start_decel)
         {
+#ifdef DEBUG_MOTORS
+            USART2_SendString("M1 Decel");
+#endif
             f_m1_decel = 1;
         }
     }
     else if (MOTOR5.motor_state == MTR_APPROACH)
     {
         // Compare the step to target step
-        if (tim2_step_counter >= MOTOR5.motor_target_steps)
+        if (tim3_step_counter >= MOTOR5.motor_target_steps)
         {
             // Stop the motor, don't touch the en pin though
             PWM_DisableChannel(MOTOR5.motor_num);
 
             // reset the counter
-            tim2_step_counter = 0;
+            tim3_step_counter = 0;
 
             // Make motor braked
             MOTOR5.motor_state = MTR_BRAKED;
@@ -863,8 +925,11 @@ void Motors_TIM3_IRQHandler(void)
     else if (MOTOR5.motor_state == MTR_ATSPEED)
     {
         // Check to raise the decel flag
-        if (tim2_step_counter >= MOTOR5.motor_start_decel)
+        if (tim3_step_counter >= MOTOR5.motor_start_decel)
         {
+#ifdef DEBUG_MOTORS
+            USART2_SendString("M5 Decel");
+#endif
             f_m5_decel = 1;
         }
     }
@@ -882,17 +947,24 @@ void Motors_TIM4_IRQHandler(void)
 
     // Increment step counter
     tim4_step_counter++;
+
+#ifdef DEBUG_INTERRUPT_TIMERS
+    USART2_SendString("TIM4:");
+    USART2_SendInt32(tim4_step_counter);
+    USART2_SendString("\r\n");
+#endif
+
     // Look if either motor is approaching, then check to stop
     if (MOTOR2.motor_state == MTR_APPROACH)
     {
         // Compare the step to target step
-        if (tim2_step_counter >= MOTOR2.motor_target_steps)
+        if (tim4_step_counter >= MOTOR2.motor_target_steps)
         {
             // Stop the motor, don't touch the en pin though
             PWM_DisableChannel(MOTOR2.motor_num);
 
             // reset the counter
-            tim2_step_counter = 0;
+            tim4_step_counter = 0;
 
             // Make motor braked
             MOTOR2.motor_state = MTR_BRAKED;
@@ -901,8 +973,11 @@ void Motors_TIM4_IRQHandler(void)
     else if (MOTOR2.motor_state == MTR_ATSPEED)
     {
         // Check to raise the decel flag
-        if (tim2_step_counter >= MOTOR2.motor_start_decel)
+        if (tim4_step_counter >= MOTOR2.motor_start_decel)
         {
+#ifdef DEBUG_MOTORS
+            USART2_SendString("M2 Decel");
+#endif
             f_m2_decel = 1;
         }
     }
@@ -921,17 +996,23 @@ void Motors_TIM5_IRQHandler(void)
     // Increment step counter
     tim5_step_counter++;
 
+#ifdef DEBUG_INTERRUPT_TIMERS
+    USART2_SendString("TIM5:");
+    USART2_SendInt32(tim5_step_counter);
+    USART2_SendString("\r\n");
+#endif
+
     // Look if either motor is approaching, then check to stop
     if (MOTOR3.motor_state == MTR_APPROACH)
     {
         // Compare the step to target step
-        if (tim2_step_counter >= MOTOR3.motor_target_steps)
+        if (tim5_step_counter >= MOTOR3.motor_target_steps)
         {
             // Stop the motor, don't touch the en pin though
             PWM_DisableChannel(MOTOR3.motor_num);
 
             // reset the counter
-            tim2_step_counter = 0;
+            tim5_step_counter = 0;
 
             // Make motor braked
             MOTOR3.motor_state = MTR_BRAKED;
@@ -940,9 +1021,46 @@ void Motors_TIM5_IRQHandler(void)
     else if (MOTOR3.motor_state == MTR_ATSPEED)
     {
         // Check to raise the decel flag
-        if (tim2_step_counter >= MOTOR3.motor_start_decel)
+        if (tim5_step_counter >= MOTOR3.motor_start_decel)
         {
             f_m3_decel = 1;
         }
     }
+}
+
+/**
+ * UART Comms
+ *
+ * USART1 can be used to communicate to the raspberry pi.
+ * For now, I'll just use USART2 to communicate to a desktop app.
+ * The basic comms that I want to send BACK to the pi are:
+ * - Motor is active/stopped (can be an indicator in the GUI)
+ * - Motor position? Obviously don't want to send this every interrupt, but maybe can use a slider
+ * - Idk
+ *
+ * The STM will RECEIVE comms from the pi/desktop in a strucutred payload that is decoded in the
+ * main FSM module.
+ *
+ * These comms will be called within the main FSM module - same with USART commands received by the
+ * STM32.
+ */
+
+/**
+ * @brief function to tell the pi that a motor is now active
+ * @param motor the motor num
+ * @return void
+ */
+static void Motors_Comms_MotorActive(uint8_t motor)
+{
+    // TODO later
+}
+
+/**
+ * @brief function to tell the pi that a motor is now inactive (still enabled)
+ * @param motor the motor num
+ * @return void
+ */
+static void Motors_Comms_MotorInactive(uint8_t motor)
+{
+    // TODO later
 }

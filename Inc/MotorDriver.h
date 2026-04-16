@@ -20,7 +20,7 @@
 
 // Motor 0 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
 #define M0_APPROACH_ARR 10000
-#define M0_RAMP_MS      1000 // milliseconds to fully ramp up or down
+#define M0_RAMP_MS      10000 // milliseconds to fully ramp up or down
 
 // Motor 1 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
 #define M1_APPROACH_ARR 10000

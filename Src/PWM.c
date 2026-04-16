@@ -7,6 +7,7 @@
 
 #include "PWM.h"
 #include "MotorDriver.h"
+#include "USART.h"
 #include "main.h"
 
 // GPIOA/B/C clocks are already enabled
@@ -353,4 +354,8 @@ void PWM_SetArr(e_MotorNum motor_number, uint32_t arr_val)
             TIM3->ARR = clipped_arr;
         }
     }
+
+    // Log the new value
+    // USART2_SendInt32(clipped_arr);
+    // USART2_SendString("\r\n");
 }

@@ -2,7 +2,10 @@
  * filename: USART.c
  * author: Benen Crombie
  *
- * UART init and functions
+ * UART init and functions.
+ * NOTE: Claude made most of this since USART is a common bare metal module
+ * My design choice was to use a ring buffer since I don't expect our comms to be 1) a lot or 2)
+ * overflow often.
  */
 
 #include "USART.h"
@@ -12,10 +15,25 @@
 // TODO eventually use USART1 for SBC comms
 
 // Prototypes
-static void USART2_LoadByteToDR();
 
 // Inits
+s_USART1_TxBuffer USART1_TxRingBuf; // USART1 for raspberry pi comms
 s_USART2_TxBuffer USART2_TxRingBuf; // USART2 for debugging
+
+/**
+ * USART1
+ *
+ * Used for comms with the raspberry pi
+ */
+
+// TODO should be more or less copy and paste from USART2 modules
+
+/**
+ * USART2
+ *
+ * Used for debugging. Temporarily used for comms with the desktop application through USB, but will
+ * later be replaced by wired connections for the raspberry pi's UART
+ */
 
 /**
  * @brief Initialize USART2 for debug, TX only
@@ -47,7 +65,8 @@ static void USART2_Initialize(void)
     // Baud = PCLK1 / USARTDIV -> USARTDIV = PCLK1 / Baud
     // NOTE if I swap to oversampling by 8, Baud = 2 * PCLK1 / USARTDIV
     // Therefore, the BRR register should be set to 5250000 / 115200
-    USART2->BRR = 5250000 / 115200; // Don't overthink or change this
+    // NOTE: Don't overthink or change this, this works fine and it's tested
+    USART2->BRR = 5250000 / 115200;
 
     // Configure NVIC for interrupts
     NVIC_EnableIRQ(USART2_IRQn);
@@ -121,17 +140,49 @@ void USART2_SendString(char *str)
 }
 
 /**
+ * @brief Send a uint32_t as ASCII over USART2
+ * @param value the number to send
+ * @return void
+ */
+void USART2_SendInt32(uint32_t value)
+{
+    char buf[11];
+    int i = 0;
+
+    // Special case for 0
+    if (value == 0)
+    {
+        USART2_AddByteToQueue('0');
+        return;
+    }
+
+    // Convert number to string (reverse order)
+    while (value > 0)
+    {
+        buf[i++] = '0' + (value % 10);
+        value /= 10;
+    }
+
+    // Send in correct order
+    while (i > 0)
+    {
+        USART2_AddByteToQueue(buf[--i]);
+    }
+}
+
+/**
  * @brief function to handle advancing the USART2 queue. This will go in the IRQ function.
  * @param void
  * @return void
  */
 void USART_USART2_IRQHandler(void)
 {
+    // Claude generated. This works
     if (USART2->SR & USART_SR_TXE)
     {
         if (USART2_TxRingBuf.head_write != USART2_TxRingBuf.tail_tx)
         {
-            // Write directly here, bypassing LoadByteToDR
+            // Write directly here
             USART2->DR               = USART2_TxRingBuf.buffer[USART2_TxRingBuf.tail_tx];
             USART2_TxRingBuf.tail_tx = (USART2_TxRingBuf.tail_tx + 1) % USART2_TX_BUFFER_SIZE;
         }

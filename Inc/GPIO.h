@@ -1,8 +1,9 @@
 /*
-filename: GPIO.h
-================
-Header for GPIO functions
-*/
+ * filename: GPIO.h
+ * author: Benen Crombie
+ *
+ * Header for GPIO functions
+ */
 
 #ifndef GPIO_H
 #define GPIO_H

@@ -69,7 +69,8 @@ int main(void)
     // Test out motor fsm
     // Set M0 to go at 99 arr speed for 100 steps
     // PWM freq prescaled down to 10 kHz, so this is 100 ticks/second (0.5 rev/s)
-    Motors_StartMotor(M0, 99, 400);
+    Motors_StartMotor(M0, 999, 100); // NOTE I lowkey cant drive the beefy NEMA17 that fast. Maybe
+                                     // cap this in raspberry pi/desktop
 
     ////////////////////////
 
@@ -148,6 +149,7 @@ static void SystemClock_Config_84MHz(void)
     while (!(RCC->CR & RCC_CR_HSIRDY))
         ;
 
+    // Don't touch this
     RCC->PLLCFGR = (16 << 0) |  // PLLM is bits [5:0]
                    (336 << 6) | // PLLN is bits [14:6]
                    (7 << 24) |  // PLLQ is bits [27:24]
