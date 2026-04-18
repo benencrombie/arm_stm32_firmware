@@ -178,11 +178,13 @@ static void SingleMotor_SetDir(s_MotorStruct *motor, uint8_t dir)
 }
 
 /**
- * @brief functino to calculate the tick when the motor should start a time controlled deceleration
+ * @brief function to estaimte the tick when the motor should start a time controlled deceleration.
+ * This function is now only used at a motor start to see if the motor is going too fast for the
+ * target number of steps.
  * @param *motor pointer to the motor struct
  * @return true if successful, false if not
  */
-static bool SingleMotor_CalculateDecelDist(s_MotorStruct *motor)
+static bool SingleMotor_CalculateRoughDecelDist(s_MotorStruct *motor)
 {
     // NOTE: deprecated, this kinda worked but isn't close to as good as just seeing how many ticks
     // it takes to ramp up then using that same number for ramp down
@@ -219,7 +221,12 @@ static bool SingleMotor_CalculateDecelDist(s_MotorStruct *motor)
     float avg_speed = (v0 + vf) * 0.5f; // steps/sec
 
     // Calculate total steps, avg speed * time * [1/1000 (sec/ms)]
-    float steps_to_decel_f  = avg_speed * (float)motor->motor_ramp_ms / 1000.0f;
+    float steps_to_decel_f =
+        2 * avg_speed * (float)motor->motor_ramp_ms /
+        1000.0f; // Added 2x multiplier after testing this several times. Not sure why, but this num
+                 // is not. This is not critical anyway, and is only used for estimation/correction,
+                 // so I'm leaving this for now and will maybe come back to when optimizing random
+                 // things
     uint32_t steps_to_decel = (uint32_t)(steps_to_decel_f + 0.5f); // round for uint32
 
     // Set the decel step count
@@ -228,7 +235,7 @@ static bool SingleMotor_CalculateDecelDist(s_MotorStruct *motor)
     // the total steps.
     if (steps_to_decel >= motor->motor_target_steps)
     {
-        // Getting some weird instances, just disable the PWM
+        // Getting some weird instances, just disable the entire motor
         SingleMotor_Disable(motor);
 
         USART2_SendString("TRYING TO START MOTOR #");
@@ -405,7 +412,7 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint8_t dir, uint3
     motor->motor_target_steps = target_steps;
 
     // Start accelerating the motor if allowed
-    if (!f_illegal_motor_start && SingleMotor_CalculateDecelDist(motor))
+    if (!f_illegal_motor_start && SingleMotor_CalculateRoughDecelDist(motor))
     {
         // Set the direction of the motor
         SingleMotor_SetDir(motor, dir);
@@ -491,7 +498,7 @@ static void SingleMotor_Disable(s_MotorStruct *motor)
     PWM_DisableChannel(motor->motor_num);
 
     // Reset the arr in the register
-    SingleMotor_SetArr(motor, MAX_ARR);
+    SingleMotor_SetArr(motor, motor->motor_approach_arr);
 
     // Change motor state to stopped
     motor->motor_state = MTR_DISABLED;
@@ -527,7 +534,8 @@ void Motors_DisableAll(void)
 }
 
 /**
- * @brief Enable all motors, taking them out of freedrive
+ * @brief Enable all motors, taking them out of freedrive. NOTE these are all on the same EN pin so
+ * this might be redundant now
  * @param void
  * @return void
  */
@@ -638,8 +646,8 @@ static void SingleMotor_HandleStateTransition(s_MotorStruct *motor)
                 // value since its off by a little (IDK WHY, MATH LOOKS OK). Anyway, this is more
                 // accurate
 
-                // TODO race conditions with this? This value doesnt have to be super accurate since
-                // we add some buffer for the approach logic to take over
+                // TODO race conditions with this? This value doesnt have to be super accurate
+                // I add some buffer for the approach logic to take over
                 motor->motor_start_decel =
                     motor->motor_target_steps - (tim2_step_counter + LEEWAY_STEPS);
 
@@ -647,7 +655,7 @@ static void SingleMotor_HandleStateTransition(s_MotorStruct *motor)
                 USART2_SendString("ATSPEED\r\n");
                 USART2_SendString("Current Step: ");
                 USART2_SendInt32(tim2_step_counter);
-                USART2_SendString("Step To Decel: ");
+                USART2_SendString("\r\nStep To Decel: ");
                 USART2_SendInt32(motor->motor_start_decel);
                 USART2_SendString("\r\n\n\n");
 #endif
@@ -759,7 +767,7 @@ static void SingleMotor_DecelerateOnTick(s_MotorStruct *motor)
     uint32_t t    = motor->motor_ramp_ticks;
     uint32_t T    = motor->motor_ramp_ms;
     uint32_t At   = motor->motor_target_arr;
-    uint32_t Amax = MAX_ARR;
+    uint32_t Amax = motor->motor_approach_arr;
 
     // Use 64b to avoid overflow
     uint64_t numerator   = (uint64_t)At * Amax * T;
@@ -798,17 +806,17 @@ static void SingleMotor_UpdateOnTick(s_MotorStruct *motor)
         case MTR_NONE:
         {
             // No op for the motor
-            break;
+            return;
         }
         case MTR_DISABLED:
         {
             // No op for the motor
-            break;
+            return;
         }
         case MTR_BRAKED:
         {
             // No op for the motor
-            break;
+            return;
         }
         case MTR_ACCELERATING:
         {
@@ -925,10 +933,16 @@ void Motors_TIM2_IRQHandler(void)
             USART2_SendString("Current Step: ");
             USART2_SendInt32(tim2_step_counter);
             USART2_SendString("\r\n\n\n");
+            // // Unplug it
+            // GPIO_Set(MTR_EN_PORT, MOTOR0.motor_en_pin);
 #endif
-
             // Stop the motor, don't touch the en pin though
             PWM_DisableChannel(MOTOR0.motor_num);
+
+            // NOTE set as GPIO output and clear to avoid floating behavior. This works... bruh
+            // Hardcoded for now, maybe abstract this or make it more intuitive, not high priority,
+            // just trying to get stuff working
+            GPIO_Pin_Init(MTR0_STEP_PORT, MTR0_STEP_PIN, 0x01, 0x00, 0x03, 0x00, 0x00);
 
             // Force the step port low, was seeing some glitches after braking
             GPIO_Clear(MOTOR0.motor_step_port, MOTOR0.motor_step_pin);
@@ -965,6 +979,9 @@ void Motors_TIM2_IRQHandler(void)
 
             // Stop the motor, don't touch the en pin though
             PWM_DisableChannel(MOTOR4.motor_num);
+
+            // NOTE set as GPIO output and clear to avoid floating behavior. This works... bruh
+            GPIO_Pin_Init(MTR4_STEP_PORT, MTR4_STEP_PIN, 0x01, 0x00, 0x03, 0x00, 0x00);
 
             // Force the step port low, was seeing some glitches after braking
             GPIO_Clear(MOTOR4.motor_step_port, MOTOR4.motor_step_pin);
@@ -1021,6 +1038,9 @@ void Motors_TIM3_IRQHandler(void)
             // Stop the motor, don't touch the en pin though
             PWM_DisableChannel(MOTOR1.motor_num);
 
+            // NOTE set as GPIO output and clear to avoid floating behavior. This works... bruh
+            GPIO_Pin_Init(MTR1_STEP_PORT, MTR1_STEP_PIN, 0x01, 0x00, 0x03, 0x00, 0x00);
+
             // Force the step port low, was seeing some glitches after braking
             GPIO_Clear(MOTOR1.motor_step_port, MOTOR1.motor_step_pin);
 
@@ -1053,6 +1073,9 @@ void Motors_TIM3_IRQHandler(void)
 
             // Stop the motor, don't touch the en pin though
             PWM_DisableChannel(MOTOR5.motor_num);
+
+            // NOTE set as GPIO output and clear to avoid floating behavior. This works... bruh
+            GPIO_Pin_Init(MTR5_STEP_PORT, MTR5_STEP_PIN, 0x01, 0x00, 0x03, 0x00, 0x00);
 
             // Force the step port low, was seeing some glitches after braking
             GPIO_Clear(MOTOR5.motor_step_port, MOTOR5.motor_step_pin);
@@ -1109,6 +1132,9 @@ void Motors_TIM4_IRQHandler(void)
             // Stop the motor, don't touch the en pin though
             PWM_DisableChannel(MOTOR2.motor_num);
 
+            // NOTE set as GPIO output and clear to avoid floating behavior. This works... bruh
+            GPIO_Pin_Init(MTR2_STEP_PORT, MTR2_STEP_PIN, 0x01, 0x00, 0x03, 0x00, 0x00);
+
             // Force the step port low, was seeing some glitches after braking
             GPIO_Clear(MOTOR2.motor_step_port, MOTOR2.motor_step_pin);
 
@@ -1163,6 +1189,9 @@ void Motors_TIM5_IRQHandler(void)
 
             // Stop the motor, don't touch the en pin though
             PWM_DisableChannel(MOTOR3.motor_num);
+
+            // NOTE set as GPIO output and clear to avoid floating behavior. This works... bruh
+            GPIO_Pin_Init(MTR3_STEP_PORT, MTR3_STEP_PIN, 0x01, 0x00, 0x03, 0x00, 0x00);
 
             // Force the step port low, was seeing some glitches after braking
             GPIO_Clear(MOTOR3.motor_step_port, MOTOR3.motor_step_pin);

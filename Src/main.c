@@ -70,8 +70,9 @@ int main(void)
     // Test out motor fsm
     // Set M0 to go at 99 arr speed for 100 steps
     // PWM freq prescaled down to 10 kHz, so this is 100 ticks/second (0.5 rev/s)
-    Motors_StartMotor(M0, 0, 999, 2000); // NOTE I lowkey cant drive the beefy NEMA17 that fast.
-                                         // Maybe cap this in raspberry pi/desktop
+    Motors_StartMotor(M0, 0, 599,
+                      1000); // NOTE I cant drive the beefy NEMA17 that fast.
+                             // Maybe cap this in raspberry pi/desktop. I THINK THIS THE MAX LOWKEY
 
     ////////////////////////
 

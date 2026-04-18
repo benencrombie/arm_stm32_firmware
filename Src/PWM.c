@@ -332,30 +332,32 @@ void PWM_SetArr(e_MotorNum motor_number, uint32_t arr_val)
         case M0:
         {
             TIM2->ARR = clipped_arr;
+            break;
         }
         case M1:
         {
             TIM3->ARR = clipped_arr;
+            break;
         }
         case M2:
         {
             TIM4->ARR = clipped_arr;
+            break;
         }
         case M3:
         {
             TIM5->ARR = clipped_arr;
+            break;
         }
         case M4:
         {
             TIM2->ARR = clipped_arr;
+            break;
         }
         case M5:
         {
             TIM3->ARR = clipped_arr;
+            break;
         }
     }
-
-    // Log the new value
-    // USART2_SendInt32(clipped_arr);
-    // USART2_SendString("\r\n");
 }

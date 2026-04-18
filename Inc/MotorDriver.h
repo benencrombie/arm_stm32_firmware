@@ -16,30 +16,31 @@
 // Frequency = F / [(PSC + 1) * (ARR + 1)]
 
 #define LEEWAY_STEPS                                                                               \
-    10 // Number of ticks to ensure that the motor reaches approach speed before target
+    50 // Number of ticks to ensure that the motor reaches approach speed before target. TODO this
+       // might need to be dependent on the motor
 
 // Motor 0 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
-#define M0_APPROACH_ARR 10000
+#define M0_APPROACH_ARR 3000
 #define M0_RAMP_MS      3000 // milliseconds to fully ramp up or down
 
 // Motor 1 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
-#define M1_APPROACH_ARR 10000
+#define M1_APPROACH_ARR 3000
 #define M1_RAMP_MS      1000 // milliseconds to fully ramp up or down
 
 // Motor 2 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
-#define M2_APPROACH_ARR 10000
+#define M2_APPROACH_ARR 3000
 #define M2_RAMP_MS      1000 // milliseconds to fully ramp up or down
 
 // Motor 3 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
-#define M3_APPROACH_ARR 10000
+#define M3_APPROACH_ARR 3000
 #define M3_RAMP_MS      1000 // milliseconds to fully ramp up or down
 
 // Motor 4 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
-#define M4_APPROACH_ARR 10000
+#define M4_APPROACH_ARR 3000
 #define M4_RAMP_MS      1000 // milliseconds to fully ramp up or down
 
 // Motor 5 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
-#define M5_APPROACH_ARR 10000
+#define M5_APPROACH_ARR 3000
 #define M5_RAMP_MS      1000 // milliseconds to fully ramp up or down
 
 // Enum for like the entire robot actuation system. Dictates all motors stopping, slowing down,
