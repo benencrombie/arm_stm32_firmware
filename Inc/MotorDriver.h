@@ -15,12 +15,12 @@
 // reductions for each cycloidal gearbox ranging from 19x to ... idk yet lol
 // Frequency = F / [(PSC + 1) * (ARR + 1)]
 
-#define LEEWAY_TICKS                                                                               \
-    5 // Number of ticks to ensure that the motor reaches approach speed before target
+#define LEEWAY_STEPS                                                                               \
+    10 // Number of ticks to ensure that the motor reaches approach speed before target
 
 // Motor 0 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
 #define M0_APPROACH_ARR 10000
-#define M0_RAMP_MS      10000 // milliseconds to fully ramp up or down
+#define M0_RAMP_MS      3000 // milliseconds to fully ramp up or down
 
 // Motor 1 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
 #define M1_APPROACH_ARR 10000
@@ -96,7 +96,7 @@ typedef struct
 } s_MotorStruct;
 
 // Prototypes
-void Motors_StartMotor(uint8_t motor_num, uint32_t arr, uint16_t number_of_steps);
+void Motors_StartMotor(uint8_t motor_num, uint8_t dir, uint32_t arr, uint16_t number_of_steps);
 void Motors_DisableAll(void);
 void Motors_EnableAll(void);
 void Motors_RampDownAll(void);

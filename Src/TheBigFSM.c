@@ -13,8 +13,8 @@
 #include "main.h"
 
 // Prototypes
-static void Command_16(uint8_t *data, uint8_t number_of_data_bytes);
-static void Command_17(uint8_t *data, uint8_t number_of_data_bytes);
+static void Command_16(uint8_t *data);
+static void Command_17(uint8_t *data);
 
 /**
  * USART Comms
@@ -47,7 +47,7 @@ static bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_by
     // If the preamble is garbo, exit and log
     if (preamble != COMMAND_PREAMBLE)
     {
-#ifdef DEBUG_FSM
+#if DEBUG_FSM
         USART2_SendString("Trash command preamble");
 #endif
         return false;
@@ -56,7 +56,7 @@ static bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_by
     // If the postamble is garbo, exit and log
     if (postamble != COMMAND_POSTAMBLE)
     {
-#ifdef DEBUG_FSM
+#if DEBUG_FSM
         USART2_SendString("Trash command postamble");
 #endif
         return false;
@@ -74,11 +74,14 @@ static bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_by
 
     // Check if we are getting the expected number of bytes.
     // 6 overhead bytes: preamble (2), command ID (1), num data bytes (1) and postamble (2)
+    // TODO Idk if I still want to put number of data bytes in the command payload. Might not be
+    // necessary since comms are UART, but this is another layer of verification so maybe...
     if (num_data_bytes != number_of_bytes - 6)
     {
-#ifdef DEBUG_FSM
+#if DEBUG_FSM
         USART2_SendString("Command num data bytes mismatch");
 #endif
+        return false;
     }
 
     // Dispatch functions for handling different things
@@ -94,16 +97,16 @@ static bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_by
 
         // CMD 16: Single Motor Start
         case 16:
-            // Call CMD 16 with pointer to command data
-            Command_16(command_data, num_data_bytes);
-#ifdef DEBUG_FSM_VERBOSE
+            Command_16(command_data);
+#if DEBUG_FSM_VERBOSE
             USART2_SendString("CMD16 received");
 #endif
             break;
 
         // CMD 17: Multi Motor Start
         case 17:
-#ifdef DEBUG_FSM_VERBOSE
+            Command_17(command_data);
+#if DEBUG_FSM_VERBOSE
             USART2_SendString("CMD17 received");
 #endif
             break;
@@ -115,7 +118,7 @@ static bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_by
         // Command not accounted for here
         default:
         {
-#ifdef DEBUG_FSM
+#if DEBUG_FSM
             USART2_SendString("Unexpected command type:");
             USART2_SendInt32((uint32_t)command);
 #endif
@@ -133,9 +136,23 @@ static bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_by
  * @param number_of_data_bytes self explanatory
  * @return void
  */
-static void Command_16(uint8_t *data, uint8_t number_of_data_bytes)
+static void Command_16(uint8_t *data)
 {
-    // TODO now
+    // Byte 0 is packed with the motor to start and direction
+    uint8_t first_byte     = data[0];
+    uint8_t motor_to_start = (first_byte >> 4) & 0x0F; // Upper bits are motor number
+    uint8_t dir            = first_byte & 0x0F;        // Lower bits are direction
+
+    // Bytes 1:2 is the target arr. Motor function calls for 32b to cap upper bounds. This was
+    // before I thought that the motor speed would be controlled by the raspberry pi/desktop. I
+    // don't think it's worth refactoring right now.
+    uint16_t target_arr = (data[1] << 8 | data[2]);
+
+    // Bytes 3:4 are the target steps
+    uint16_t target_steps = (data[3] << 8 | data[4]);
+
+    // TODO put a DIR parameter in the motor functions. I forgor
+    Motors_StartMotor(motor_to_start, dir, target_arr, target_steps);
 }
 
 /**
@@ -144,7 +161,7 @@ static void Command_16(uint8_t *data, uint8_t number_of_data_bytes)
  * @param number_of_bytes self explanatory
  * @return void
  */
-static void Command_17(uint8_t *data, uint8_t number_of_data_bytes)
+static void Command_17(uint8_t *data)
 {
     // TODO later
 }

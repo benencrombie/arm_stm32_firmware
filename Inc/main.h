@@ -6,14 +6,15 @@
 #include <stdint.h>
 
 // Debug flags dictate what is sent through UART. If you turn everything on you will get... a lot
-#define DEBUG                  (1)
+#define DEBUG_SYS              (1)
 #define DEBUG_MOTORS           (1)
 #define DEBUG_FSM              (1)
 #define DEBUG_FSM_VERBOSE      (1)
 #define DEBUG_INTERRUPT_TIMERS (0)
 
 // Globally used defines
-#define SYSHZ (84000000) // 84 MHz
+#define SYSHZ  (84000000) // 84 MHz
+#define APB1HZ (5250000)  // Prescaled by 128 for now, artbitratily chosen
 
 // Global vars
 extern uint32_t SystemCoreClock; // Current clock freq (adjusted to 84 MHz), making global incase

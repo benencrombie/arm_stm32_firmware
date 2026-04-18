@@ -49,7 +49,7 @@ int main(void)
                              // big FSM. Haven't architected what that'll look like just yet, but
                              // this is good for bringup
 
-    // Enable interrupts
+    // Enable interrupts.
     __enable_irq();
 
     /////////////////
@@ -58,7 +58,8 @@ int main(void)
 
     FSM_Initialize();
 
-#ifdef DEBUG
+#if DEBUG_SYS
+    // TODO Skip a few lines, bug remove once I make a clean GUI for logging
     USART2_SendString("Fully Initialized\r\n");
 #endif
 
@@ -69,8 +70,8 @@ int main(void)
     // Test out motor fsm
     // Set M0 to go at 99 arr speed for 100 steps
     // PWM freq prescaled down to 10 kHz, so this is 100 ticks/second (0.5 rev/s)
-    Motors_StartMotor(M0, 999, 100); // NOTE I lowkey cant drive the beefy NEMA17 that fast. Maybe
-                                     // cap this in raspberry pi/desktop
+    Motors_StartMotor(M0, 0, 999, 2000); // NOTE I lowkey cant drive the beefy NEMA17 that fast.
+                                         // Maybe cap this in raspberry pi/desktop
 
     ////////////////////////
 
@@ -104,7 +105,7 @@ int main(void)
                 ms_counter = 0;
 
                 // Debug testing block, every 1 second
-#ifdef DEBUG
+#if DEBUG_SYS
                 // Toggle test pin - hooked up to LED, easily shows that CPU is not hanging
                 GPIO_ToggleTestPin();
 #endif

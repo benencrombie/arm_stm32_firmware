@@ -12,10 +12,10 @@
 #include "main.h"
 
 // These are arbitrarily chosen. Speed of PWMs is adjusted with ARR
-#define TIM2_PRESC 127 // 5.25 MHz / (524 + 1) ~ 10,000 Hz
-#define TIM3_PRESC 524 // 5.25 MHz / (524 + 1) ~ 10,000 Hz
-#define TIM4_PRESC 524 // 5.25 MHz / (524 + 1) ~ 10,000 Hz
-#define TIM5_PRESC 524 // 5.25 MHz / (524 + 1) ~ 10,000 Hz
+#define TIM2_PRESC 127 // 5.25 MHz / (127 + 1) ~ 41,000 Hz
+#define TIM3_PRESC 511 // 5.25 MHz / (511 + 1) ~ 10,300 Hz
+#define TIM4_PRESC 511 // 5.25 MHz / (511 + 1) ~ 10,300 Hz
+#define TIM5_PRESC 511 // 5.25 MHz / (511 + 1) ~ 10,300 Hz
 
 #define MAX_ARR 65535
 #define MIN_ARR 19 // this is the fastest a motor should go, 10 kHz / 20 = 500 ticks/second
