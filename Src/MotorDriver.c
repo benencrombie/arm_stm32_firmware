@@ -414,6 +414,18 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint8_t dir, uint3
     // Start accelerating the motor if allowed
     if (!f_illegal_motor_start && SingleMotor_CalculateRoughDecelDist(motor))
     {
+        // NOTE need to reinit them as timer pins. There was a bug for spurious ticks after the
+        // motor stopped, and this was due to floating timer pins. Fixed it by setting to gpios
+        // after motors stop, but need to reinit in this enable function now
+        uint8_t pwm_afr = 0x01;
+        // AF2 applies to motor STEPs 1,2,3, and 5
+        if (motor->motor_num == M1 || motor->motor_num == M2 || motor->motor_num == M3 ||
+            motor->motor_num == M4)
+        {
+            pwm_afr = 0x02;
+        }
+        GPIO_Pin_Init(MTR0_STEP_PORT, MTR0_STEP_PIN, 0x02, 0x00, 0x03, 0x00, pwm_afr);
+
         // Set the direction of the motor
         SingleMotor_SetDir(motor, dir);
 

@@ -7,10 +7,11 @@
 
 // Debug flags dictate what is sent through UART. If you turn everything on you will get... a lot
 #define DEBUG_SYS              (1)
-#define DEBUG_MOTORS           (1)
+#define DEBUG_MOTORS           (0)
 #define DEBUG_FSM              (1)
 #define DEBUG_FSM_VERBOSE      (1)
 #define DEBUG_INTERRUPT_TIMERS (0)
+#define DEBUG_COMMS            (1)
 
 // Globally used defines
 #define SYSHZ  (84000000) // 84 MHz

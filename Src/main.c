@@ -1,15 +1,15 @@
 #include "main.h"
+#include "FSM.h"
 #include "GPIO.h"
 #include "MotorDriver.h"
 #include "PWM.h"
 #include "SysTick.h"
-#include "TheBigFSM.h"
 #include "USART.h"
 #include "stm32f446xx.h"
 
 // prototypes
 static void SystemClock_Config_84MHz(void);
-// interrupts
+// interrupts (also prototypes)
 void TIM2_IRQHandler(void);   // Motors 0 and 4 steps
 void TIM3_IRQHandler(void);   // Motors 1 and 5 steps
 void TIM4_IRQHandler(void);   // Motor 2 steps
@@ -52,6 +52,9 @@ int main(void)
     // Enable interrupts.
     __enable_irq();
 
+    // Clear the COMM port log... Claude said this string does that and it works lol
+    USART2_SendString("\033[2J\033[H");
+
     /////////////////
     // Initialize FSM
     /////////////////
@@ -67,13 +70,6 @@ int main(void)
     // PRELOOP TESTING BLOCK
     ////////////////////////
 
-    // Test out motor fsm
-    // Set M0 to go at 99 arr speed for 100 steps
-    // PWM freq prescaled down to 10 kHz, so this is 100 ticks/second (0.5 rev/s)
-    Motors_StartMotor(M0, 0, 599,
-                      1000); // NOTE I cant drive the beefy NEMA17 that fast.
-                             // Maybe cap this in raspberry pi/desktop. I THINK THIS THE MAX LOWKEY
-
     ////////////////////////
 
     while (1)
@@ -86,9 +82,6 @@ int main(void)
 
             // Increment ms counter
             ms_counter++;
-
-            // Update motors
-            Motors_FSM_Tick1000Hz();
 
             // Update overall system logic
             FSM_Tick1000Hz();
@@ -105,11 +98,9 @@ int main(void)
                 // Reset counter
                 ms_counter = 0;
 
-                // Debug testing block, every 1 second
-#if DEBUG_SYS
-                // Toggle test pin - hooked up to LED, easily shows that CPU is not hanging
-                GPIO_ToggleTestPin();
-#endif
+                // Update overall system logic
+                FSM_Tick1Hz();
+
                 ////////////////////////
                 // 1 HZ TESTING BLOCK
                 ////////////////////////
@@ -117,6 +108,9 @@ int main(void)
                 ////////////////////////
             }
         }
+
+        // Tick the FSM at 84 MHz
+        FSM_TickSys;
 
         ////////////////////////
         // SYSTICK TESTING BLOCK
@@ -127,9 +121,8 @@ int main(void)
 }
 
 /**
- * @brief configure the clock to be 84MHz (stm32f446 is capable), default is 16MHz. This is vibe
- * coded for the most part, but it works and is common in STM architectures. Little risk of this
- * failing.
+ * @brief configure the clock to be 84MHz (stm32f446 is capable), default is 16MHz. Keeping this in
+ * main for visibility
  * @param void
  * @return void
  */

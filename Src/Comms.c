@@ -1,12 +1,11 @@
 /**
- * filename: TheBigFSM.c
+ * filename: Comms.c
  * author: Benen Crombie
  *
- * This module will dictate what goes on for high level events or triggers. This module will bridge
- * the smaller fsms together
+ * This module contains all serial comms received over USART (from desktop or raspberry pi)
  */
 
-#include "TheBigFSM.h"
+#include "FSM.h"
 #include "GPIO.h"
 #include "MotorDriver.h"
 #include "USART.h"
@@ -17,7 +16,7 @@ static void Command_16(uint8_t *data);
 static void Command_17(uint8_t *data);
 
 /**
- * USART Comms
+ * USART Comms TODO move this to a separate module like Comms.c/h, make this FSM module cleaner
  *
  * Big Endian Payload strucutre is as follows:
  * Bytes 0:1 is preamble: 0x1111
@@ -35,7 +34,7 @@ static void Command_17(uint8_t *data);
  * @param number_of_bytes the total number of bytes in the command
  * @return true if commmand successfully processed false if not
  */
-static bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_bytes)
+bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_bytes)
 {
     // Bytes 0:1 is the preamble
     uint16_t preamble = ((uint16_t)command_buffer[0] << 8) | (uint16_t)command_buffer[1];
@@ -47,7 +46,7 @@ static bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_by
     // If the preamble is garbo, exit and log
     if (preamble != COMMAND_PREAMBLE)
     {
-#if DEBUG_FSM
+#if DEBUG_COMMS
         USART2_SendString("Trash command preamble");
 #endif
         return false;
@@ -56,7 +55,7 @@ static bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_by
     // If the postamble is garbo, exit and log
     if (postamble != COMMAND_POSTAMBLE)
     {
-#if DEBUG_FSM
+#if DEBUG_COMMS
         USART2_SendString("Trash command postamble");
 #endif
         return false;
@@ -66,7 +65,7 @@ static bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_by
     // Byte 2 is the specific command
     uint8_t command = command_buffer[2];
 
-    // Byte 3 is the number of data bytes, inot including this byte
+    // Byte 3 is the number of data bytes, not including this byte
     uint8_t num_data_bytes = command_buffer[3];
 
     // Bytes 4 through N-3 is the command data, just pass a pointer of index 4 along
@@ -74,11 +73,10 @@ static bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_by
 
     // Check if we are getting the expected number of bytes.
     // 6 overhead bytes: preamble (2), command ID (1), num data bytes (1) and postamble (2)
-    // TODO Idk if I still want to put number of data bytes in the command payload. Might not be
-    // necessary since comms are UART, but this is another layer of verification so maybe...
+    // This doesn't have much use other than error checking since commands are set numbers of bytes
     if (num_data_bytes != number_of_bytes - 6)
     {
-#if DEBUG_FSM
+#if DEBUG_COMMS
         USART2_SendString("Command num data bytes mismatch");
 #endif
         return false;
@@ -98,7 +96,7 @@ static bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_by
         // CMD 16: Single Motor Start
         case 16:
             Command_16(command_data);
-#if DEBUG_FSM_VERBOSE
+#if DEBUG_COMMS
             USART2_SendString("CMD16 received");
 #endif
             break;
@@ -106,7 +104,7 @@ static bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_by
         // CMD 17: Multi Motor Start
         case 17:
             Command_17(command_data);
-#if DEBUG_FSM_VERBOSE
+#if DEBUG_COMMS
             USART2_SendString("CMD17 received");
 #endif
             break;
@@ -118,7 +116,7 @@ static bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_by
         // Command not accounted for here
         default:
         {
-#if DEBUG_FSM
+#if DEBUG_COMMS
             USART2_SendString("Unexpected command type:");
             USART2_SendInt32((uint32_t)command);
 #endif
@@ -151,8 +149,20 @@ static void Command_16(uint8_t *data)
     // Bytes 3:4 are the target steps
     uint16_t target_steps = (data[3] << 8 | data[4]);
 
-    // TODO put a DIR parameter in the motor functions. I forgor
+    // Start the motor
     Motors_StartMotor(motor_to_start, dir, target_arr, target_steps);
+
+#if DEBUG_COMMS
+    USART2_SendString("Start motor: ");
+    USART2_SendInt32(motor_to_start);
+    USART2_SendString("\r\nDIR: ");
+    USART2_SendInt32(dir);
+    USART2_SendString("\r\nARR: ");
+    USART2_SendInt32(target_arr);
+    USART2_SendString("\r\nTarget Steps: ");
+    USART2_SendInt32(target_steps);
+    USART2_SendString("\r\n");
+#endif
 }
 
 /**
@@ -164,21 +174,4 @@ static void Command_16(uint8_t *data)
 static void Command_17(uint8_t *data)
 {
     // TODO later
-}
-
-/**
- * FSM
- *
- * Handles high level decisions of the system. Mainly coming from USART comms for now, but maybe
- * will incorporate some sensors, LEDs, screens, etc. in the future. Decisions requiring higher
- * levels of processing (e.g., voice commands/vision) will be handled by the pi, so this could be
- * pretty minimal.
- */
-
-void FSM_Initialize(void)
-{
-}
-
-void FSM_Tick1000Hz(void)
-{
 }

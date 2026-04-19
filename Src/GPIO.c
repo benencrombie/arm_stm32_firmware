@@ -169,7 +169,7 @@ void GPIO_Initialize(void)
     // uint8_t ANLG_PUPDR   = 0x00; // 00 is no pu/pd
     // uint8_t ANLG_AFR     = 0x00; // not relevant for analog
 
-    // // Initialize PWM/Timer configs
+    // Initialize PWM/Timer configs
     uint8_t PWM_MODER   = 0x02; // 10 is af mode
     uint8_t PWM_OTYPER  = 0x00; // 00 is push-pull
     uint8_t PWM_OSPEEDR = 0x03; // 11 is very high speed
