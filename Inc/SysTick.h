@@ -1,12 +1,18 @@
-/*
-filename: SysTick.h
-================
-Header for SysTick.c
-*/
+/**
+ * filename: SysTick.h
+ * author: Benen Crombie
+ *
+ * Header for SysTick.c
+ */
+
+#ifndef SYSTICK_H
+#define SYSTICK_H
 
 #include "main.h"
 
 // milliseconds flag visible to main.c
-extern uint8_t f_ms;
+extern volatile uint32_t f_ms;
 
 void SysTick_Initialize(void);
+
+#endif

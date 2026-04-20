@@ -5,8 +5,17 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// TODO identify pins for USART, PWM, and other comms first, then use leftovers
-// as IOs
+// Debug flags dictate what is sent through UART. If you turn everything on you will get... a lot
+#define DEBUG_SYS              (1)
+#define DEBUG_MOTORS           (0)
+#define DEBUG_FSM              (1)
+#define DEBUG_FSM_VERBOSE      (1)
+#define DEBUG_INTERRUPT_TIMERS (0)
+#define DEBUG_COMMS            (1)
+
+// Globally used defines
+#define SYSHZ  (84000000) // 84 MHz
+#define APB1HZ (5250000)  // Prescaled by 128 for now, artbitratily chosen
 
 // Global vars
 extern uint32_t SystemCoreClock; // Current clock freq (adjusted to 84 MHz), making global incase
@@ -21,28 +30,28 @@ void SystemCoreClockUpdate(void);
  */
 
 #define TEST_GPIO_PORT GPIOC
-#define TEST_GPIO_PIN  0
+#define TEST_GPIO_PIN  3 // PC3
 
 /**
  * Motor IOs:
  * Each motor has an EN, DIR, and STEP
  */
 
-#define MTR_EN_PORT GPIOA // Just use the same port for all ENs for simplicity
-#define MTR0_EN_PIN 0
-#define MTR1_EN_PIN 0
-#define MTR2_EN_PIN 0
-#define MTR3_EN_PIN 0
-#define MTR4_EN_PIN 0
-#define MTR5_EN_PIN 0
+#define MTR_EN_PORT GPIOC // Just use the same port for all ENs for simplicity
+#define MTR0_EN_PIN 0     // PC0
+#define MTR1_EN_PIN 1     // PC1
+#define MTR2_EN_PIN 2     // PC2
+#define MTR3_EN_PIN 13    // PC13
+#define MTR4_EN_PIN 14    // PC14
+#define MTR5_EN_PIN 15    // PC15
 
 #define MTR_DIR_PORT GPIOB // Just use the same port for all DIRs for simplicity
-#define MTR0_DIR_PIN 0
-#define MTR1_DIR_PIN 0
-#define MTR2_DIR_PIN 0
-#define MTR3_DIR_PIN 0
-#define MTR4_DIR_PIN 0
-#define MTR5_DIR_PIN 0
+#define MTR0_DIR_PIN 3     // PB3
+#define MTR1_DIR_PIN 4     // PB4
+#define MTR2_DIR_PIN 5     // PB5
+#define MTR3_DIR_PIN 13    // PB13
+#define MTR4_DIR_PIN 14    // PB14
+#define MTR5_DIR_PIN 15    // PB15
 
 /**
  * USARTs:
@@ -51,7 +60,7 @@ void SystemCoreClockUpdate(void);
  * a "brain"/raspberri pi is incorporated
  */
 
-// USART2 is for debug, built in through USB for devboard
+// USART2 is for debug, built in through USB for devboard so this is easy to use
 #define USART2_PORT   GPIOA
 #define USART2_TX_PIN 2 // PA2, AF7
 #define USART2_RX_PIN 3 // PA3, AF7

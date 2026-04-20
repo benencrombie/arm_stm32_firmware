@@ -1,11 +1,12 @@
-/*
-filename: GPIO.c
-================
-Contains initialization and basic functions of GPIOs.
-
-Refer to the document RM0394, Rev 5. References for RM0394 chapters/sections
-will be referenced inline (e.g., [8.5.1]).
-*/
+/**
+ * filename: GPIO.c
+ * author: Benen Crombie
+ *
+ * Contains initialization and basic functions of GPIOs.
+ *
+ * Refer to the document RM0394, Rev 5. References for RM0394 chapters/sections
+ * will be referenced inline (e.g., [8.5.1]).
+ */
 
 #include "GPIO.h"
 #include "main.h"
@@ -134,6 +135,26 @@ void GPIO_Initialize(void)
     GPIO_Pin_Init(TEST_GPIO_PORT, TEST_GPIO_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
                   OUT_AFR);
 
+    GPIO_Pin_Init(MTR_EN_PORT, MTR0_EN_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR, OUT_AFR);
+    GPIO_Pin_Init(MTR_EN_PORT, MTR1_EN_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR, OUT_AFR);
+    GPIO_Pin_Init(MTR_EN_PORT, MTR2_EN_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR, OUT_AFR);
+    GPIO_Pin_Init(MTR_EN_PORT, MTR3_EN_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR, OUT_AFR);
+    GPIO_Pin_Init(MTR_EN_PORT, MTR4_EN_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR, OUT_AFR);
+    GPIO_Pin_Init(MTR_EN_PORT, MTR5_EN_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR, OUT_AFR);
+
+    GPIO_Pin_Init(MTR_DIR_PORT, MTR0_DIR_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+    GPIO_Pin_Init(MTR_DIR_PORT, MTR1_DIR_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+    GPIO_Pin_Init(MTR_DIR_PORT, MTR2_DIR_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+    GPIO_Pin_Init(MTR_DIR_PORT, MTR3_DIR_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+    GPIO_Pin_Init(MTR_DIR_PORT, MTR4_DIR_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+    GPIO_Pin_Init(MTR_DIR_PORT, MTR5_DIR_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+
     // // Initialize Standard Inputs
     // uint8_t IN_MODER   = 0x00; // 00 is input mode
     // uint8_t IN_OTYPER  = 0x00; // 00 is push-pull
@@ -148,7 +169,7 @@ void GPIO_Initialize(void)
     // uint8_t ANLG_PUPDR   = 0x00; // 00 is no pu/pd
     // uint8_t ANLG_AFR     = 0x00; // not relevant for analog
 
-    // // Initialize PWM/Timer configs
+    // Initialize PWM/Timer configs
     uint8_t PWM_MODER   = 0x02; // 10 is af mode
     uint8_t PWM_OTYPER  = 0x00; // 00 is push-pull
     uint8_t PWM_OSPEEDR = 0x03; // 11 is very high speed

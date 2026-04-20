@@ -1,14 +1,3 @@
-/*
-filename: SysTick.c
-================
-Timekeeper module. Flags for milliseconds
-
-TODO: hard to find documentation on the core_cm4.h registers. Got a lot of help from claude with
-the init and interrupt, but it either works or it doesn't so it isn't critical to debug just yet.
-Presumably, this is what HAL would do, but there isn't a lot of overhead here at all so low
-priority.
-*/
-
 #include "SysTick.h"
 #include "core_cm4.h"
 #include "main.h"
@@ -16,13 +5,21 @@ priority.
 
 #define MS_TICKS (SystemCoreClock / 1000) // 84000 Ticks/ms
 
-uint8_t f_ms = 0;
+// flag for ms
+volatile uint32_t f_ms = 0;
 
+/**
+ * @brief this function spins up a millisecond counter from the cpu's 84 MHz. This is vibe
+ * coded for the most part, but it works and is common in STM architectures. Little risk of this
+ * failing.
+ * @param void
+ * @returns void
+ */
 void SysTick_Initialize(void)
 {
     // SysTick is the hardware countdown timer insite Cortex-M4
     // Load is reload value register, countdown from 84k continuously, then a flag is put up
-    SysTick->LOAD = (uint16_t)MS_TICKS - 1;
+    SysTick->LOAD = MS_TICKS - 1;
 
     // Current value register, set current val to 0 on init
     SysTick->VAL = 0;

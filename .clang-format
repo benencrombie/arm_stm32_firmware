@@ -8,3 +8,4 @@ BreakBeforeBraces: Allman
 AlignTrailingComments: true
 AlignConsecutiveMacros: true
 AlignConsecutiveAssignments: true
+IndentCaseLabels: true
