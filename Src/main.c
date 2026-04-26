@@ -52,25 +52,12 @@ int main(void)
     // Enable interrupts.
     __enable_irq();
 
-    // Clear the COMM port log... Claude said this string does that and it works lol
-    USART2_SendString("\033[2J\033[H");
-
-    /////////////////
-    // Initialize FSM
-    /////////////////
-
+    // Initialize the FSM
     FSM_Initialize();
 
 #if DEBUG_SYS
-    // TODO Skip a few lines, bug remove once I make a clean GUI for logging
     USART2_SendString("Fully Initialized\r\n");
 #endif
-
-    ////////////////////////
-    // PRELOOP TESTING BLOCK
-    ////////////////////////
-
-    ////////////////////////
 
     while (1)
     {
@@ -86,12 +73,6 @@ int main(void)
             // Update overall system logic
             FSM_Tick1000Hz();
 
-            ////////////////////////
-            // 1000 HZ TESTING BLOCK
-            ////////////////////////
-
-            ////////////////////////
-
             // Every 1 second (1000 ms)
             if (ms_counter == 1000)
             {
@@ -100,25 +81,18 @@ int main(void)
 
                 // Update overall system logic
                 FSM_Tick1Hz();
-
-                ////////////////////////
-                // 1 HZ TESTING BLOCK
-                ////////////////////////
-
-                ////////////////////////
             }
         }
-
         // Tick the FSM at 84 MHz
-        FSM_TickSys;
-
-        ////////////////////////
-        // SYSTICK TESTING BLOCK
-        ////////////////////////
-
-        ////////////////////////
+        FSM_TickSys();
     }
 }
+
+/**
+ * System Clock Configuration
+ *
+ * Main tick, peripheral clocks, etc.
+ */
 
 /**
  * @brief configure the clock to be 84MHz (stm32f446 is capable), default is 16MHz. Keeping this in
@@ -234,9 +208,9 @@ void TIM5_IRQHandler(void)
 }
 
 /**
- * @brief USART2 interrupt handler
+ * @brief USART2 interrupt handler. FAH
  */
 void USART2_IRQHandler(void)
 {
-    USART_USART2_IRQHandler();
+    USART2_InterruptHandler();
 }

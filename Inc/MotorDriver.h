@@ -16,32 +16,38 @@
 // Frequency = F / [(PSC + 1) * (ARR + 1)]
 
 #define LEEWAY_STEPS                                                                               \
-    50 // Number of ticks to ensure that the motor reaches approach speed before target. TODO this
-       // might need to be dependent on the motor
+    (50) // Number of ticks to ensure that the motor reaches approach speed before target. TODO this
+         // might need to be dependent on the motor
 
 // Motor 0 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
-#define M0_APPROACH_ARR 3000
-#define M0_RAMP_MS      3000 // milliseconds to fully ramp up or down
+#define M0_APPROACH_ARR (3000)
+#define M0_RAMP_MS      (3000) // milliseconds to fully ramp up or down
+#define M0_HOMING_REST  (10)   // manually toggling GPIO for homing, ms between steps
 
 // Motor 1 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
-#define M1_APPROACH_ARR 3000
-#define M1_RAMP_MS      1000 // milliseconds to fully ramp up or down
+#define M1_APPROACH_ARR (3000)
+#define M1_RAMP_MS      (1000) // milliseconds to fully ramp up or down
+#define M1_HOMING_REST  (10)   // manually toggling GPIO for homing, ms between steps
 
 // Motor 2 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
-#define M2_APPROACH_ARR 3000
-#define M2_RAMP_MS      1000 // milliseconds to fully ramp up or down
+#define M2_APPROACH_ARR (3000)
+#define M2_RAMP_MS      (1000) // milliseconds to fully ramp up or down
+#define M2_HOMING_REST  (10)   // manually toggling GPIO for homing, ms between steps
 
 // Motor 3 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
-#define M3_APPROACH_ARR 3000
-#define M3_RAMP_MS      1000 // milliseconds to fully ramp up or down
+#define M3_APPROACH_ARR (3000)
+#define M3_RAMP_MS      (1000) // milliseconds to fully ramp up or down
+#define M3_HOMING_REST  (10)   // manually toggling GPIO for homing, ms between steps
 
 // Motor 4 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
-#define M4_APPROACH_ARR 3000
-#define M4_RAMP_MS      1000 // milliseconds to fully ramp up or down
+#define M4_APPROACH_ARR (3000)
+#define M4_RAMP_MS      (1000) // milliseconds to fully ramp up or down
+#define M4_HOMING_REST  (10)   // manually toggling GPIO for homing, ms between steps
 
 // Motor 5 - 200 steps/rev, 19x gear reduction -> 3800 steps/joint rev
-#define M5_APPROACH_ARR 3000
-#define M5_RAMP_MS      1000 // milliseconds to fully ramp up or down
+#define M5_APPROACH_ARR (3000)
+#define M5_RAMP_MS      (1000) // milliseconds to fully ramp up or down
+#define M5_HOMING_REST  (10)   // manually toggling GPIO for homing, ms between steps
 
 // Enum for like the entire robot actuation system. Dictates all motors stopping, slowing down,
 // disabled, etc.
@@ -68,6 +74,7 @@ typedef enum
 typedef enum
 {
     MTR_NONE,         // No destination state, might be useful in future implementations
+    MTR_HOMING,       // Motor is homing to start position
     MTR_DISABLED,     // Motor is off, EN low
     MTR_BRAKED,       // EN is on, PWM disabled
     MTR_ACCELERATING, // Motor is accelerating. Counter tracked in struct
@@ -94,9 +101,12 @@ typedef struct
     uint16_t motor_ramp_ticks;     // number of ticks to ramp, calculated with a static function
     uint16_t motor_start_decel;    // the tick number to start decelerating, called on interrupt
     volatile uint8_t *motor_decel_flag; // pointer to deceleration flag
+    volatile uint8_t *motor_homed_flag; // pointer to the homed flag
 } s_MotorStruct;
 
 // Prototypes
+void Motors_HomeAll(void);
+void Motors_SetStateToRunning(void);
 void Motors_StartMotor(uint8_t motor_num, uint8_t dir, uint32_t arr, uint16_t number_of_steps);
 void Motors_DisableAll(void);
 void Motors_EnableAll(void);

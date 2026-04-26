@@ -2,7 +2,8 @@
  * filename: Comms.c
  * author: Benen Crombie
  *
- * This module contains all serial comms received over USART (from desktop or raspberry pi)
+ * This module contains all serial comms received over USART (from desktop or raspberry pi).
+ * This should end with adding an event to the queue
  */
 
 #include "FSM.h"
@@ -13,7 +14,7 @@
 
 // Prototypes
 static void Command_16(uint8_t *data);
-static void Command_17(uint8_t *data);
+static void Command_19(uint8_t *data);
 
 /**
  * USART Comms TODO move this to a separate module like Comms.c/h, make this FSM module cleaner
@@ -24,60 +25,40 @@ static void Command_17(uint8_t *data);
  * Bytes 3 is the number of data bytes, not including this
  * Bytes 4:N-3 is the command data
  * Bytes N-2:N-1 is postable: 0x9999
+ *
+ * The preamble and postamble are tackled within the USART module so dont worry about that
  */
 
 /**
  * @brief Decode payload, this is like the middleware of the system. From USART1 (eventually). This
  * function is probably going to be extra beefy so might split it into specific processors depending
- * on the command... like put all start motor commands into their own function, etc.
+ * on the command... like put all start motor commands into their own function, etc. This is called
+ * within the USART2 module
  * @param *command_buffer pointer to the command data
  * @param number_of_bytes the total number of bytes in the command
  * @return true if commmand successfully processed false if not
  */
 bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_bytes)
 {
-    // Bytes 0:1 is the preamble
-    uint16_t preamble = ((uint16_t)command_buffer[0] << 8) | (uint16_t)command_buffer[1];
-
-    // Bytes N-2:N-1 is the postamble (last two)
-    uint16_t postamble = ((uint16_t)(command_buffer[number_of_bytes - 2]) << 8) |
-                         (uint16_t)command_buffer[number_of_bytes - 1];
-
-    // If the preamble is garbo, exit and log
-    if (preamble != COMMAND_PREAMBLE)
-    {
-#if DEBUG_COMMS
-        USART2_SendString("Trash command preamble");
-#endif
-        return false;
-    }
-
-    // If the postamble is garbo, exit and log
-    if (postamble != COMMAND_POSTAMBLE)
-    {
-#if DEBUG_COMMS
-        USART2_SendString("Trash command postamble");
-#endif
-        return false;
-    }
+    // Preamble and postamble already packed, nothing makes it here without those being good.
 
     // Now start cooking with specific commands.
-    // Byte 2 is the specific command
-    uint8_t command = command_buffer[2];
+    // Byte 0 is the specific command
+    uint8_t command = command_buffer[0];
 
     // Byte 3 is the number of data bytes, not including this byte
-    uint8_t num_data_bytes = command_buffer[3];
+    uint8_t num_data_bytes = command_buffer[1];
 
     // Bytes 4 through N-3 is the command data, just pass a pointer of index 4 along
-    uint8_t *command_data = &command_buffer[4];
+    uint8_t *command_data = &command_buffer[2];
 
     // Check if we are getting the expected number of bytes.
-    // 6 overhead bytes: preamble (2), command ID (1), num data bytes (1) and postamble (2)
+    // 6 overhead bytes: command ID (1), num data bytes (1)
     // This doesn't have much use other than error checking since commands are set numbers of bytes
-    if (num_data_bytes != number_of_bytes - 6)
+    if (num_data_bytes != number_of_bytes - 2)
     {
 #if DEBUG_COMMS
-        USART2_SendString("Command num data bytes mismatch");
+        USART2_SendString("Command num data bytes mismatch\r\n");
 #endif
         return false;
     }
@@ -93,21 +74,15 @@ bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_bytes)
          * Commands 16-31 are motor related
          */
 
-        // CMD 16: Single Motor Start
+        // CMD 16: Single Motor Start. Hex is 0x10
         case 16:
             Command_16(command_data);
 #if DEBUG_COMMS
-            USART2_SendString("CMD16 received");
+            USART2_SendString("CMD16 received\r\n");
 #endif
             break;
 
-        // CMD 17: Multi Motor Start
-        case 17:
-            Command_17(command_data);
-#if DEBUG_COMMS
-            USART2_SendString("CMD17 received");
-#endif
-            break;
+        // Don't use 16 (0x11) because it mighttttt get confused with preamble, idk
 
         /**
          * Commands 240-255 are not used (no reason tbh, bad vibes)
@@ -119,6 +94,7 @@ bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_bytes)
 #if DEBUG_COMMS
             USART2_SendString("Unexpected command type:");
             USART2_SendInt32((uint32_t)command);
+            USART2_SendString("\r\n");
 #endif
             return false;
         }
@@ -171,7 +147,7 @@ static void Command_16(uint8_t *data)
  * @param number_of_bytes self explanatory
  * @return void
  */
-static void Command_17(uint8_t *data)
+static void Command_19(uint8_t *data)
 {
     // TODO later
 }

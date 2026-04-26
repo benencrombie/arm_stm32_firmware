@@ -17,10 +17,12 @@
 // Enum FSM states
 typedef enum
 {
-    STATE_IDLE,
-    STATE_RUNNING,
-    STATE_DISABLED,
-    STATE_FAULT,
+    STATE_IDLE,      // For debugging, this is 0
+    STATE_READY,     // 1
+    STATE_HOMING,    // 2
+    STATE_FREEDRIVE, // 3
+    STATE_DISABLED,  // 4
+    STATE_FAULT,     // 5
 
 } e_fsm_state;
 
@@ -28,9 +30,13 @@ typedef enum
 typedef enum
 {
     EVENT_NONE,
-    EVENT_STARTSYS,
-    EVENT_ENABLEMOTORS,
+    EVENT_HOMING_COMPLETE,
+    EVENT_JEFFBUTTONPRESS,
+    EVENT_TODDBUTTONPRESS,
+    EVENT_BARTBUTTONPRESS,
 } e_fsm_event;
+
+// ENUM event struct, includes decoded payload junk
 
 // Event queue, ring buffer
 typedef struct
@@ -46,8 +52,8 @@ typedef struct
 {
     e_fsm_state state;
     s_fsm_event_queue queue;
-    uint32_t stateCounter; // incorporating this for future timeouts/blinking status LEDs
-    bool entryFlag;        // flipped on a state transitions, used to handle once per state actions
+    uint32_t state_counter; // incorporating this for future timeouts/blinking status LEDs
+    bool entry_flag;        // flipped on a state transitions, used to handle once per state actions
 } fsm_context;
 
 // Make this struct public

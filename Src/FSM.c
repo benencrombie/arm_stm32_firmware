@@ -21,6 +21,9 @@
 e_fsm_state curr_fsm_state = STATE_IDLE;
 e_fsm_event curr_fsm_event = EVENT_NONE;
 
+// Counters
+static uint32_t second_counter_jaunt = 0; // Used for testing
+
 // Set up the fsm context, for broader use, any module can add an event to the queue. I'll try to
 // document where stuff is called though since this can get messy. Most events will probably be
 // generated from USART comms (incoming payloads from the raspberry pi), so a lot of this should be
@@ -97,16 +100,10 @@ static void FSM_TransitionState(e_fsm_state next_state)
     fsm.state = next_state;
 
     // Reset the state timer
-    fsm.stateCounter = 0;
+    fsm.state_counter = 0;
 
     // Set the entry flag to true, handlers should clear this flag
-    fsm.entryFlag = true;
-
-#if DEBUG_FSM
-    USART2_SendString("Entering State: ");
-    USART2_SendInt32(next_state);
-    USART2_SendString("\r\n");
-#endif
+    fsm.entry_flag = true;
 }
 
 /**
@@ -120,10 +117,10 @@ void FSM_Initialize(void)
     fsm.state = STATE_IDLE;
 
     // Start off with an entry flag to fire up the init sequence
-    fsm.entryFlag = true;
+    fsm.entry_flag = true;
 
     // Set the state timer to 0
-    fsm.stateCounter = 0;
+    fsm.state_counter = 0;
 }
 
 /**
@@ -133,19 +130,41 @@ void FSM_Initialize(void)
  */
 void FSM_Tick1Hz(void)
 {
+    /**
+     * Execute state independent logic
+     */
+
+    // None right now
+
+    /**
+     * Execute state dependent logic
+     */
     switch (fsm.state)
     {
         case STATE_IDLE:
         {
             break;
         }
-        case STATE_RUNNING:
+        case STATE_HOMING:
         {
+            break;
+        }
+        case STATE_FREEDRIVE:
+        {
+            break;
+        }
+        case STATE_READY:
+        {
+            ////////////////
+            // Testing block
+
+            ////////////////
+
             /**
              * Handle all sub fsms
              */
 
-            // Toggle an LED to show that teh system is running.
+            // Toggle an LED to show that the system is running.
             GPIO_ToggleTestPin();
 
             break;
@@ -172,39 +191,92 @@ void FSM_Tick1Hz(void)
  */
 void FSM_Tick1000Hz(void)
 {
+    /**
+     * Process events in the queue
+     */
+
+    // Drain the event queue
+    e_fsm_event event_out;
+    while (FSM_GrabEventFromQueue(&event_out))
+    {
+        switch (fsm.state)
+        {
+            case STATE_IDLE:
+            {
+                if (event_out == EVENT_JEFFBUTTONPRESS)
+                {
+                    // Transition the entire system to ready
+                    FSM_TransitionState(STATE_READY);
+                }
+
+                break;
+            }
+            case STATE_HOMING:
+            {
+                break;
+            }
+            case STATE_FREEDRIVE:
+            {
+                break;
+            }
+            case STATE_READY:
+            {
+                // TODO build out a GPIO polling/tick setup for button presses?
+                if (event_out == EVENT_JEFFBUTTONPRESS)
+                {
+                    // Go to disabled, have to ramp down motors in the state dependent logic
+                    FSM_TransitionState(STATE_DISABLED);
+                }
+
+                break;
+            }
+            case STATE_DISABLED:
+            {
+                // TODO build out a GPIO polling/tick setup for button presses?
+                if (event_out == EVENT_JEFFBUTTONPRESS)
+                {
+                    FSM_TransitionState(STATE_READY);
+                }
+
+                break;
+            }
+            case STATE_FAULT:
+            {
+                break;
+            }
+            default:
+            {
+                break;
+            }
+        }
+    }
+
+    /**
+     * Execute state independent logic
+     */
+
+    // System always polls relevant IO presses
+    GPIO_Tick1000Hz();
+
+    /**
+     * Execute state dependent logic
+     */
     switch (fsm.state)
     {
         case STATE_IDLE:
         {
-            // Handle IDLE entry actions, don't think anything needed here
-            if (fsm.entryFlag)
-            {
-                // Set flag to false
-                fsm.entryFlag = false;
-
-                // Just start a motor here, but this will eventually be event driven
-                Motors_StartMotor(
-                    M0, 0, 599,
-                    1000); // NOTE I cant drive the beefy NEMA17 that fast.
-                           // Maybe cap this in raspberry pi/desktop. I THINK THIS THE MAX LOWKEY
-
-                // I think I want this to be a pushbutton or something in the future, but just go to
-                // running off rip
-                FSM_TransitionState(STATE_RUNNING);
-            }
-
             break;
         }
-        case STATE_RUNNING:
+        case STATE_HOMING:
         {
-            if (fsm.entryFlag)
-            {
-                // Set the flag to false
-                fsm.entryFlag = false;
-
-                // TODO any actions?
-            }
-
+            break;
+        }
+        case STATE_FREEDRIVE:
+        {
+            break;
+        }
+        case STATE_READY:
+        {
             /**
              * Handle all sub fsms
              */
@@ -216,26 +288,10 @@ void FSM_Tick1000Hz(void)
         }
         case STATE_DISABLED:
         {
-            if (fsm.entryFlag)
-            {
-                // Set the flag to false
-                fsm.entryFlag = false;
-
-                // TODO any actions?
-            }
-
             break;
         }
         case STATE_FAULT:
         {
-            if (fsm.entryFlag)
-            {
-                // Set the flag to false
-                fsm.entryFlag = false;
-
-                // TODO any actions?
-            }
-
             break;
         }
         default:
@@ -245,7 +301,7 @@ void FSM_Tick1000Hz(void)
     }
 
     // Increment state coutner
-    fsm.stateCounter++;
+    fsm.state_counter++;
 }
 
 /**
@@ -255,15 +311,53 @@ void FSM_Tick1000Hz(void)
  */
 void FSM_TickSys(void)
 {
+    /**
+     * Execute state independent logic
+     */
+
+    // System always listens for commands
+    USART2_TickSys();
+
+    /**
+     * Execute state dependent logic
+     */
     switch (fsm.state)
     {
         case STATE_IDLE:
         {
+            // Handle IDLE entry actions, don't think anything needed here
+            if (fsm.entry_flag)
+            {
+                // Set flag to false
+                fsm.entry_flag = false;
 
+                // I think I want this to be a pushbutton or something in the future, but just go to
+                // running off rip
+                FSM_TransitionState(STATE_READY);
+            }
             break;
         }
-        case STATE_RUNNING:
+        case STATE_HOMING:
         {
+            break;
+        }
+        case STATE_FREEDRIVE:
+        {
+            break;
+        }
+        case STATE_READY:
+        {
+            if (fsm.entry_flag)
+            {
+                // Set the flag to false
+                fsm.entry_flag = false;
+
+                // Set the motor state to running
+                Motors_SetStateToRunning();
+
+                // TODO just start a motor here, but this will eventually be event driven
+                Motors_StartMotor(M0, 0, 599, 1000);
+            }
             /**
              * Handle all sub fsms
              */
@@ -271,10 +365,24 @@ void FSM_TickSys(void)
         }
         case STATE_DISABLED:
         {
+            if (fsm.entry_flag)
+            {
+                // Set the flag to false
+                fsm.entry_flag = false;
+
+                // TODO ramp down all motors... Yeah bring this function back lol
+            }
             break;
         }
         case STATE_FAULT:
         {
+            if (fsm.entry_flag)
+            {
+                // Set the flag to false
+                fsm.entry_flag = false;
+
+                // TODO any actions?
+            }
             break;
         }
         default:

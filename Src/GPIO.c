@@ -9,9 +9,14 @@
  */
 
 #include "GPIO.h"
+#include "FSM.h"
 #include "main.h"
 
-bool f_test_pin_set = false; // Variable used for testing pin hooked up to LED
+// inits
+bool f_test_pin_set            = false; // Variable used for testing pin hooked up to LED
+uint16_t jeff_debounce_counter = 0;     // Debounce counter for the button that I named jeff.
+uint16_t todd_debounce_counter = 0;     // I named this one Todd
+uint16_t bart_debounce_counter = 0;     // I named this one Bart
 
 /**
  * @brief Enable GPIO port A/B/C clocks
@@ -155,12 +160,19 @@ void GPIO_Initialize(void)
     GPIO_Pin_Init(MTR_DIR_PORT, MTR5_DIR_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
                   OUT_AFR);
 
-    // // Initialize Standard Inputs
-    // uint8_t IN_MODER   = 0x00; // 00 is input mode
-    // uint8_t IN_OTYPER  = 0x00; // 00 is push-pull
-    // uint8_t IN_OSPEEDR = 0x03; // 11 is very high speed
-    // uint8_t IN_PUPDR   = 0x00; // 00 is no pu/pd
-    // uint8_t IN_AFR     = 0x00; // not relevant for standard ins
+    // Initialize Standard Inputs
+    uint8_t IN_MODER   = 0x00; // 00 is input mode
+    uint8_t IN_OTYPER  = 0x00; // 00 is push-pull
+    uint8_t IN_OSPEEDR = 0x03; // 11 is very high speed
+    uint8_t IN_PUPDR   = 0x00; // 00 is no pu/pd
+    uint8_t IN_AFR     = 0x00; // not relevant for standard ins
+
+    GPIO_Pin_Init(BUTTON_JEFF_PORT, BUTTON_JEFF_PIN, IN_MODER, IN_OTYPER, IN_OSPEEDR, IN_PUPDR,
+                  IN_AFR);
+    GPIO_Pin_Init(BUTTON_TODD_PORT, BUTTON_TODD_PIN, IN_MODER, IN_OTYPER, IN_OSPEEDR, IN_PUPDR,
+                  IN_AFR);
+    GPIO_Pin_Init(BUTTON_BART_PORT, BUTTON_BART_PIN, IN_MODER, IN_OTYPER, IN_OSPEEDR, IN_PUPDR,
+                  IN_AFR);
 
     // // Initialize Analogs
     // uint8_t ANLG_MODER   = 0x03; // 11 is analog mode
@@ -210,6 +222,87 @@ void GPIO_Initialize(void)
 
     // I2C/SPI/Other peripherals? None yet
 }
+
+/**
+ * @brief GPIO 1000 Hz service loop, checks for button presses and builds in debouncer
+ * @param void
+ * @return void
+ */
+void GPIO_Tick1000Hz(void)
+{
+    /**
+     * Jeff button, does this that and this
+     */
+    if (GPIO_ReadInput(BUTTON_JEFF_PORT, BUTTON_JEFF_PIN))
+    {
+        // Increase the counter on the millisecond
+        jeff_debounce_counter++;
+
+        if (jeff_debounce_counter >= GPIO_DEBOUNCE_MIN)
+        {
+            // Queue up a jeff button hit event
+            FSM_AddEventToQueue(EVENT_JEFFBUTTONPRESS);
+
+            // Don't reset the counter since I don't want this event to be spammed if I hold the
+            // button down
+        }
+    }
+    else
+    {
+        // Set to 0, button is lifted or just not pressed
+        jeff_debounce_counter = 0;
+    }
+
+    /**
+     * Todd button, does that this and that
+     */
+    if (GPIO_ReadInput(BUTTON_TODD_PORT, BUTTON_TODD_PIN))
+    {
+        // Increase the counter on the millisecond
+        todd_debounce_counter++;
+
+        if (todd_debounce_counter >= GPIO_DEBOUNCE_MIN)
+        {
+            // Queue up a jeff button hit event
+            FSM_AddEventToQueue(EVENT_TODDBUTTONPRESS);
+
+            // Don't reset the counter since I don't want this event to be spammed if I hold the
+            // button down
+        }
+    }
+    else
+    {
+        // Set to 0, button is lifted or just not pressed
+        todd_debounce_counter = 0;
+    }
+
+    /**
+     * Bart button, does that this and that
+     */
+    if (GPIO_ReadInput(BUTTON_BART_PORT, BUTTON_BART_PIN))
+    {
+        // Increase the counter on the millisecond
+        bart_debounce_counter++;
+
+        if (bart_debounce_counter >= GPIO_DEBOUNCE_MIN)
+        {
+            // Queue up a jeff button hit event
+            FSM_AddEventToQueue(EVENT_BARTBUTTONPRESS);
+
+            // Don't reset the counter since I don't want this event to be spammed if I hold the
+            // button down
+        }
+    }
+    else
+    {
+        // Set to 0, button is lifted or just not pressed
+        bart_debounce_counter = 0;
+    }
+}
+
+/**
+ * Testing actions
+ */
 
 /**
  * @brief toggle the testing pin, used for testing/validating stuff is happening

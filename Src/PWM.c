@@ -45,17 +45,19 @@ static void PWM_Init_TIM2(void)
     TIM2->CCMR1 |= (0x06 << 12); // PWM mode 1
     TIM2->CCMR1 |= (0x01 << 11); // enable preload
 
+    // TODO not reviewed, but I refactored the motor 4 pin to be TIM2_CH4 instead of CH3
+
     // Configure PWM on ch3. CCMR2 contains ch3 and ch4
     // Ch3 is its 7:0 of this register
-    TIM2->CCMR2 &= ~(0xFF << 0); // clear ch3
-    TIM2->CCMR2 |= (0x06 << 4);  // PWM mode 1
-    TIM2->CCMR2 |= (0x01 << 3);  // output compare preload
+    TIM2->CCMR2 &= ~(0xFF << 8); // clear ch3
+    TIM2->CCMR2 |= (0x06 << 12); // PWM mode 1
+    TIM2->CCMR2 |= (0x01 << 11); // output compare preload
 
     // Set duty cycle for ch2. Will be reset anyway, dont think i need to initialize?
     TIM2->CCR2 = 500; // Defaulting. this will be changed when starting a pwm
 
     // Set the duty cycle for ch3
-    TIM2->CCR3 = 500; // Defaulting. this will be changed when starting a pwm
+    TIM2->CCR4 = 500; // Defaulting. this will be changed when starting a pwm
 
     // Enable preload. This allows speed to be adjusted mid cycle smoothly
     // Added this in and speed transitions are a lot cleaner
@@ -69,6 +71,9 @@ static void PWM_Init_TIM2(void)
 
     // Enable interrupt
     TIM2->DIER |= TIM_DIER_UIE;
+
+    // Set priority behind USART
+    NVIC_SetPriority(TIM2_IRQn, 1);
 
     // Enable NVIC for interrupt
     NVIC_EnableIRQ(TIM2_IRQn);
@@ -125,6 +130,9 @@ static void PWM_Init_TIM3(void)
     // Enable interrupt
     TIM3->DIER |= TIM_DIER_UIE;
 
+    // Set priority behind USART
+    NVIC_SetPriority(TIM3_IRQn, 1);
+
     // Enable NVIC for interrupt
     NVIC_EnableIRQ(TIM3_IRQn);
 
@@ -170,6 +178,9 @@ static void PWM_Init_TIM4(void)
 
     // Enable interrupt
     TIM4->DIER |= TIM_DIER_UIE;
+
+    // Set priority behind USART
+    NVIC_SetPriority(TIM4_IRQn, 1);
 
     // Enable NVIC for interrupt
     NVIC_EnableIRQ(TIM4_IRQn);
@@ -217,6 +228,9 @@ static void PWM_Init_TIM5(void)
     // Enable interrupt
     TIM5->DIER |= TIM_DIER_UIE;
 
+    // Set priority behind USART
+    NVIC_SetPriority(TIM5_IRQn, 1);
+
     // Enable NVIC for interrupt
     NVIC_EnableIRQ(TIM5_IRQn);
 
@@ -259,7 +273,7 @@ void PWM_EnableChannel(e_MotorNum motor_number)
             TIM5->CCER |= TIM_CCER_CC1E; // enable channel 1
             break;
         case M4:
-            TIM2->CCER |= TIM_CCER_CC3E; // enable channel 3
+            TIM2->CCER |= TIM_CCER_CC4E; // enable channel 4
             break;
         case M5:
             TIM3->CCER |= TIM_CCER_CC2E; // enable channel 2
@@ -289,7 +303,7 @@ void PWM_DisableChannel(e_MotorNum motor_number)
             TIM5->CCER &= ~TIM_CCER_CC1E; // disable channel 1
             break;
         case M4:
-            TIM2->CCER &= ~TIM_CCER_CC3E; // disable channel 3
+            TIM2->CCER &= ~TIM_CCER_CC4E; // disable channel 4
             break;
         case M5:
             TIM3->CCER &= ~TIM_CCER_CC2E; // disable channel 2
