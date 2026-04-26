@@ -4,6 +4,7 @@
 #include "stm32f446xx.h"
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h> // for memcpy, useful for posting events
 
 // Debug flags dictate what is sent through UART. If you turn everything on you will get... a lot
 #define DEBUG_SYS              (1)

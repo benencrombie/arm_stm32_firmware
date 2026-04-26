@@ -181,28 +181,28 @@ void GPIO_Initialize(void)
     // uint8_t ANLG_PUPDR   = 0x00; // 00 is no pu/pd
     // uint8_t ANLG_AFR     = 0x00; // not relevant for analog
 
-    // Initialize PWM/Timer configs
-    uint8_t PWM_MODER   = 0x02; // 10 is af mode
-    uint8_t PWM_OTYPER  = 0x00; // 00 is push-pull
-    uint8_t PWM_OSPEEDR = 0x03; // 11 is very high speed
-    uint8_t PWM_PUPDR   = 0x00; // 00 is no pu/pd
-    uint8_t PWM_AFR     = 0x01; // AF1 applies to motor STEPs 0 and 4
+    // NOTE: I'm initializing this as a standard output to avoid spurious ticks/noise. Pins are
+    // reconfigured as PWMs upon starting a motor.
+    GPIO_Pin_Init(MTR0_STEP_PORT, MTR0_STEP_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+    GPIO_Pin_Init(MTR1_STEP_PORT, MTR1_STEP_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+    GPIO_Pin_Init(MTR2_STEP_PORT, MTR2_STEP_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+    GPIO_Pin_Init(MTR3_STEP_PORT, MTR3_STEP_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+    GPIO_Pin_Init(MTR4_STEP_PORT, MTR4_STEP_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+    GPIO_Pin_Init(MTR5_STEP_PORT, MTR5_STEP_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
 
-    GPIO_Pin_Init(MTR0_STEP_PORT, MTR0_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
-                  PWM_AFR);
-    GPIO_Pin_Init(MTR4_STEP_PORT, MTR4_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
-                  PWM_AFR);
-
-    PWM_AFR = 0x02; // AF2 applies to motor STEPs 1,2,3, and 5
-
-    GPIO_Pin_Init(MTR1_STEP_PORT, MTR1_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
-                  PWM_AFR);
-    GPIO_Pin_Init(MTR2_STEP_PORT, MTR2_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
-                  PWM_AFR);
-    GPIO_Pin_Init(MTR3_STEP_PORT, MTR3_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
-                  PWM_AFR);
-    GPIO_Pin_Init(MTR5_STEP_PORT, MTR5_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
-                  PWM_AFR);
+    // Clear all step pins to avoid an initial first tick on init
+    GPIO_Clear(MTR0_STEP_PORT, MTR0_STEP_PIN);
+    GPIO_Clear(MTR1_STEP_PORT, MTR1_STEP_PIN);
+    GPIO_Clear(MTR2_STEP_PORT, MTR2_STEP_PIN);
+    GPIO_Clear(MTR3_STEP_PORT, MTR3_STEP_PIN);
+    GPIO_Clear(MTR4_STEP_PORT, MTR4_STEP_PIN);
+    GPIO_Clear(MTR5_STEP_PORT, MTR5_STEP_PIN);
 
     // Initialize UARTs
     uint8_t UART_MODER   = 0x02; // 10 is af mode
@@ -240,8 +240,10 @@ void GPIO_Tick1000Hz(void)
 
         if (jeff_debounce_counter >= GPIO_DEBOUNCE_MIN)
         {
-            // Queue up a jeff button hit event
-            FSM_AddEventToQueue(EVENT_JEFFBUTTONPRESS);
+            // Queue up a jeff button hit event, no event data so init to 0s
+            s_fsm_event evt = {0};
+            evt.type        = EVENT_JEFFBUTTONPRESS;
+            FSM_AddEventToQueue(evt);
 
             // Don't reset the counter since I don't want this event to be spammed if I hold the
             // button down
@@ -264,7 +266,9 @@ void GPIO_Tick1000Hz(void)
         if (todd_debounce_counter >= GPIO_DEBOUNCE_MIN)
         {
             // Queue up a jeff button hit event
-            FSM_AddEventToQueue(EVENT_TODDBUTTONPRESS);
+            s_fsm_event evt = {0};
+            evt.type        = EVENT_TODDBUTTONPRESS;
+            FSM_AddEventToQueue(evt);
 
             // Don't reset the counter since I don't want this event to be spammed if I hold the
             // button down
@@ -287,7 +291,9 @@ void GPIO_Tick1000Hz(void)
         if (bart_debounce_counter >= GPIO_DEBOUNCE_MIN)
         {
             // Queue up a jeff button hit event
-            FSM_AddEventToQueue(EVENT_BARTBUTTONPRESS);
+            s_fsm_event evt = {0};
+            evt.type        = EVENT_BARTBUTTONPRESS;
+            FSM_AddEventToQueue(evt);
 
             // Don't reset the counter since I don't want this event to be spammed if I hold the
             // button down

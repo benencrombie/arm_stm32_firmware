@@ -335,15 +335,21 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint8_t dir, uint3
     {
         case M0:
         {
-            // If motor 4 is running, nuh uh
-            if (MOTOR4.motor_state != MTR_BRAKED && MOTOR4.motor_state != MTR_DISABLED)
+            // If the motor is already running, nuh uh
+            if (MOTOR0.motor_state != MTR_BRAKED && MOTOR0.motor_state != MTR_DISABLED)
             {
                 // Don't do that
                 f_illegal_motor_start = 1;
 
-#if DEBUG_MOTORS
+                USART2_SendString("Motor 0 already running, nuh uh\r\n");
+            }
+
+            // If motor 4 is running, nuh uh
+            else if (MOTOR4.motor_state != MTR_BRAKED && MOTOR4.motor_state != MTR_DISABLED)
+            {
+                // Don't do that
+                f_illegal_motor_start = 1;
                 USART2_SendString("Tried to start motor 0, but motor 4 is running\r\n");
-#endif
             }
             else
             {
@@ -353,15 +359,20 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint8_t dir, uint3
         }
         case M1:
         {
+            // If the motor is already running, nuh uh
+            if (MOTOR1.motor_state != MTR_BRAKED && MOTOR1.motor_state != MTR_DISABLED)
+            {
+                // Don't do that
+                f_illegal_motor_start = 1;
+                USART2_SendString("Motor 1 already running, nuh uh\r\n");
+            }
             // If motor 5 is running, nuh uh
-            if (MOTOR5.motor_state != MTR_BRAKED && MOTOR5.motor_state != MTR_DISABLED)
+            else if (MOTOR5.motor_state != MTR_BRAKED && MOTOR5.motor_state != MTR_DISABLED)
             {
                 // Don't do that
                 f_illegal_motor_start = 1;
 
-#if DEBUG_MOTORS
                 USART2_SendString("Tried to start motor 1, but motor 5 is running\r\n");
-#endif
             }
             else
             {
@@ -371,27 +382,56 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint8_t dir, uint3
         }
         case M2:
         {
-            /* no op. ur good */
-            tim4_step_counter = 0;
-            break;
-        }
-        case M3:
-        {
-            /* no op. ur good */
-            tim5_step_counter = 0;
-            break;
-        }
-        case M4:
-        {
-            // If motor 0 is running, nuh uh
-            if (MOTOR0.motor_state != MTR_BRAKED && MOTOR0.motor_state != MTR_DISABLED)
+            // If the motor is already running, nuh uh
+            if (MOTOR2.motor_state != MTR_BRAKED && MOTOR2.motor_state != MTR_DISABLED)
             {
                 // Don't do that
                 f_illegal_motor_start = 1;
 
-#if DEBUG_MOTORS
+                USART2_SendString("Motor 2 already running, nuh uh\r\n");
+            }
+            else
+            {
+                /* no op. ur good */
+                tim4_step_counter = 0;
+            }
+            break;
+        }
+        case M3:
+        {
+            // If the motor is already running, nuh uh
+            if (MOTOR3.motor_state != MTR_BRAKED && MOTOR3.motor_state != MTR_DISABLED)
+            {
+                // Don't do that
+                f_illegal_motor_start = 1;
+
+                USART2_SendString("Motor 3 already running, nuh uh\r\n");
+            }
+            else
+            {
+                /* no op. ur good */
+                tim5_step_counter = 0;
+            }
+            break;
+        }
+        case M4:
+        {
+            // If the motor is already running, nuh uh
+            if (MOTOR4.motor_state != MTR_BRAKED && MOTOR4.motor_state != MTR_DISABLED)
+            {
+                // Don't do that
+                f_illegal_motor_start = 1;
+
+                USART2_SendString("Motor 4 already running, nuh uh\r\n");
+            }
+
+            // If motor 0 is running, nuh uh
+            else if (MOTOR0.motor_state != MTR_BRAKED && MOTOR0.motor_state != MTR_DISABLED)
+            {
+                // Don't do that
+                f_illegal_motor_start = 1;
+
                 USART2_SendString("Tried to start motor 4, but motor 0 is running\r\n");
-#endif
             }
             else
             {
@@ -401,15 +441,21 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint8_t dir, uint3
         }
         case M5:
         {
-            // If motor 1 is running, nuh uh
-            if (MOTOR1.motor_state != MTR_BRAKED && MOTOR1.motor_state != MTR_DISABLED)
+            // If the motor is already running, nuh uh
+            if (MOTOR5.motor_state != MTR_BRAKED && MOTOR5.motor_state != MTR_DISABLED)
             {
                 // Don't do that
                 f_illegal_motor_start = 1;
 
-#if DEBUG_MOTORS
+                USART2_SendString("Motor 5 already running, nuh uh\r\n");
+            }
+            // If motor 1 is running, nuh uh
+            else if (MOTOR1.motor_state != MTR_BRAKED && MOTOR1.motor_state != MTR_DISABLED)
+            {
+                // Don't do that
+                f_illegal_motor_start = 1;
+
                 USART2_SendString("Tried to start motor 5, but motor 1 is running\r\n");
-#endif
             }
             else
             {
@@ -419,60 +465,65 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint8_t dir, uint3
         }
     }
 
-    // Ensure the decel flag is cleared
-    *(motor->motor_decel_flag) = 0;
-
-    // Clear the ramp ticks
-    motor->motor_ramp_ticks = 0;
-
-    // Set the new destination state
-    motor->motor_target_arr = target_arr;
-
-    // Tell the motor how many steps to go
-    motor->motor_target_steps = target_steps;
-
     // Start accelerating the motor if allowed
-    if (!f_illegal_motor_start && SingleMotor_CalculateRoughDecelDist(motor))
+    if (!f_illegal_motor_start)
     {
-        // NOTE need to reinit them as timer pins. There was a bug for spurious ticks after the
-        // motor stopped, and this was due to floating timer pins. Fixed it by setting to gpios
-        // after motors stop, but need to reinit in this enable function now
-        uint8_t pwm_afr = 0x01;
-        // AF2 applies to motor STEPs 1,2,3, and 5
-        if (motor->motor_num == M1 || motor->motor_num == M2 || motor->motor_num == M3 ||
-            motor->motor_num == M4)
+        // Ensure the decel flag is cleared
+        *(motor->motor_decel_flag) = 0;
+
+        // Clear the ramp ticks
+        motor->motor_ramp_ticks = 0;
+
+        // Set the new destination state
+        motor->motor_target_arr = target_arr;
+
+        // Tell the motor how many steps to go
+        motor->motor_target_steps = target_steps;
+
+        // Check quick speed to distance check. Might migrate away from thsi function but it may be
+        // used to automatically set the arr if too high
+        if (SingleMotor_CalculateRoughDecelDist(motor))
         {
-            pwm_afr = 0x02;
-        }
-        GPIO_Pin_Init(motor->motor_step_port, motor->motor_step_pin, 0x02, 0x00, 0x03, 0x00,
-                      pwm_afr);
+            // NOTE need to reinit them as timer pins. There was a bug for spurious ticks after the
+            // motor stopped, and this was due to floating timer pins. Fixed it by setting to gpios
+            // after motors stop, but need to reinit in this enable function now
+            uint8_t pwm_afr = 0x01;
+            // AF2 applies to motor STEPs 1,2,3, and 5
+            if (motor->motor_num == M1 || motor->motor_num == M2 || motor->motor_num == M3 ||
+                motor->motor_num == M4)
+            {
+                pwm_afr = 0x02;
+            }
+            GPIO_Pin_Init(motor->motor_step_port, motor->motor_step_pin, 0x02, 0x00, 0x03, 0x00,
+                          pwm_afr);
 
-        // Set the direction of the motor
-        SingleMotor_SetDir(motor, dir);
+            // Set the direction of the motor
+            SingleMotor_SetDir(motor, dir);
 
-        // Set the current state to accelerating
-        motor->motor_state = MTR_ACCELERATING;
+            // Set the current state to accelerating
+            motor->motor_state = MTR_ACCELERATING;
 
-        // Actually set the arr to the approach arr (slowest speed)
-        SingleMotor_SetArr(motor, motor->motor_approach_arr);
+            // Actually set the arr to the approach arr (slowest speed)
+            SingleMotor_SetArr(motor, motor->motor_approach_arr);
 
-        // Enable the PWM channel
-        PWM_EnableChannel(motor->motor_num);
+            // Enable the PWM channel
+            PWM_EnableChannel(motor->motor_num);
 
-        // Print out all startup configs
+            // Print out all startup configs
 #if DEBUG_MOTORS
-        USART2_SendString("Target ARR: ");
-        USART2_SendInt32(motor->motor_target_arr);
-        USART2_SendString("\r\nTarget Steps: ");
-        USART2_SendInt32(motor->motor_target_steps);
-        USART2_SendString("\r\nCalculated Decel Step: ");
-        USART2_SendInt32(motor->motor_start_decel);
-        USART2_SendString("\r\n\n\n\n");
+            USART2_SendString("Target ARR: ");
+            USART2_SendInt32(motor->motor_target_arr);
+            USART2_SendString("\r\nTarget Steps: ");
+            USART2_SendInt32(motor->motor_target_steps);
+            USART2_SendString("\r\nCalculated Decel Step: ");
+            USART2_SendInt32(motor->motor_start_decel);
+            USART2_SendString("\r\n\n\n\n");
 #endif
+        }
     }
     else
     {
-        // no op, disable the thang?
+        USART2_SendString("Illegal Motor Start\r\n");
     }
 }
 

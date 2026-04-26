@@ -12,4 +12,4 @@
 #define COMMAND_POSTAMBLE (0x9999)
 
 // Prototypes
-bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_bytes);
+void Command_ProcessPayload(s_fsm_event *evt);

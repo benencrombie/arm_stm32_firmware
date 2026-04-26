@@ -13,6 +13,7 @@
 // Payload defines
 #define COMMAND_PREAMBLE  (0x1111)
 #define COMMAND_POSTAMBLE (0x9999)
+#define MAX_COMMAND_SIZE  (32) // data bytes
 
 // Enum FSM states
 typedef enum
@@ -30,6 +31,7 @@ typedef enum
 typedef enum
 {
     EVENT_NONE,
+    EVENT_PAYLOAD,
     EVENT_HOMING_COMPLETE,
     EVENT_JEFFBUTTONPRESS,
     EVENT_TODDBUTTONPRESS,
@@ -37,11 +39,18 @@ typedef enum
 } e_fsm_event;
 
 // ENUM event struct, includes decoded payload junk
+typedef struct FSM
+{
+    e_fsm_event type;
+    uint8_t command_id;
+    uint8_t data[MAX_COMMAND_SIZE];
+    uint8_t data_len;
+} s_fsm_event;
 
 // Event queue, ring buffer
 typedef struct
 {
-    e_fsm_event buf[FSM_EVENT_QUEUE_SIZE];
+    s_fsm_event buf[FSM_EVENT_QUEUE_SIZE];
     uint8_t head;
     uint8_t tail;
     uint8_t count;
@@ -60,7 +69,7 @@ typedef struct
 extern fsm_context fsm;
 
 // Prototypes
-void FSM_AddEventToQueue(e_fsm_event evt);
+void FSM_AddEventToQueue(s_fsm_event evt);
 void FSM_Initialize(void);
 void FSM_Tick1Hz(void);
 void FSM_Tick1000Hz(void);

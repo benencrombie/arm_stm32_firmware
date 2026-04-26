@@ -7,7 +7,7 @@
  */
 
 #include "USART.h"
-#include "Comms.h"
+#include "FSM.h"
 #include "GPIO.h"
 #include "main.h"
 
@@ -267,11 +267,19 @@ void USART2_TickSys(void)
                 if (byte == 0x99)
                 {
 #if DEBUG_USART_RX
-                    USART2_SendString("Received a full command, processing now!\r\n");
+                    USART2_SendString("Received a full command, processing now\r\n");
 #endif
-                    // Decode the payload, this function should unpack it and create an event with
-                    // struct data appended
-                    Command_ProcessPayload(usart2_frame_buf, usart2_frame_len);
+                    // Build the event for the FSM queue
+                    s_fsm_event evt = {0}; // init 0s
+                    evt.type        = EVENT_PAYLOAD;
+                    evt.command_id  = usart2_frame_buf[0];  // command is the first byte
+                    evt.data_len    = usart2_frame_len - 1; // This won't include the command byte
+
+                    // Copy over the payload bytes to event stack
+                    memcpy(evt.data, &usart2_frame_buf[1], evt.data_len);
+
+                    // Post the event. BOOM
+                    FSM_AddEventToQueue(evt);
                 }
                 // If teh second postamble byte isnt received, junk data
                 else

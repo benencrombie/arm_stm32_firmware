@@ -12,14 +12,11 @@
  */
 
 #include "FSM.h"
+#include "Comms.h"
 #include "GPIO.h"
 #include "MotorDriver.h"
 #include "USART.h"
 #include "main.h"
-
-// Inits
-e_fsm_state curr_fsm_state = STATE_IDLE;
-e_fsm_event curr_fsm_event = EVENT_NONE;
 
 // Counters
 static uint32_t second_counter_jaunt = 0; // Used for testing
@@ -45,7 +42,7 @@ fsm_context fsm;
  * @param evt an event to add to the queue
  * @return void
  */
-void FSM_AddEventToQueue(e_fsm_event evt)
+void FSM_AddEventToQueue(s_fsm_event evt)
 {
     // If the event queue is full, don't do anything and just log it
     if (fsm.queue.count >= FSM_EVENT_QUEUE_SIZE)
@@ -69,7 +66,7 @@ void FSM_AddEventToQueue(e_fsm_event evt)
  * @param event_out pointer to the popped event, used when calling this function
  * @return false for no event grabbed, true for an event was grabbed
  */
-static bool FSM_GrabEventFromQueue(e_fsm_event *event_out)
+static bool FSM_GrabEventFromQueue(s_fsm_event *event_out)
 {
     // If the queue is empty, there are no events to be grabbed
     if (fsm.queue.count == 0)
@@ -196,14 +193,14 @@ void FSM_Tick1000Hz(void)
      */
 
     // Drain the event queue
-    e_fsm_event event_out;
+    s_fsm_event event_out;
     while (FSM_GrabEventFromQueue(&event_out))
     {
         switch (fsm.state)
         {
             case STATE_IDLE:
             {
-                if (event_out == EVENT_JEFFBUTTONPRESS)
+                if (event_out.type == EVENT_JEFFBUTTONPRESS)
                 {
                     // Transition the entire system to ready
                     FSM_TransitionState(STATE_READY);
@@ -222,10 +219,16 @@ void FSM_Tick1000Hz(void)
             case STATE_READY:
             {
                 // TODO build out a GPIO polling/tick setup for button presses?
-                if (event_out == EVENT_JEFFBUTTONPRESS)
+                if (event_out.type == EVENT_JEFFBUTTONPRESS)
                 {
                     // Go to disabled, have to ramp down motors in the state dependent logic
                     FSM_TransitionState(STATE_DISABLED);
+                }
+                // TODO build payload processing. This is gonna be huge
+                if (event_out.type == EVENT_PAYLOAD)
+                {
+                    // pass pointer to teh event into processor
+                    Command_ProcessPayload(&event_out);
                 }
 
                 break;
@@ -233,7 +236,7 @@ void FSM_Tick1000Hz(void)
             case STATE_DISABLED:
             {
                 // TODO build out a GPIO polling/tick setup for button presses?
-                if (event_out == EVENT_JEFFBUTTONPRESS)
+                if (event_out.type == EVENT_JEFFBUTTONPRESS)
                 {
                     FSM_TransitionState(STATE_READY);
                 }
@@ -354,9 +357,6 @@ void FSM_TickSys(void)
 
                 // Set the motor state to running
                 Motors_SetStateToRunning();
-
-                // TODO just start a motor here, but this will eventually be event driven
-                Motors_StartMotor(M0, 0, 599, 1000);
             }
             /**
              * Handle all sub fsms

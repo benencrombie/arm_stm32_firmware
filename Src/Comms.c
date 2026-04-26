@@ -32,39 +32,22 @@ static void Command_19(uint8_t *data);
 /**
  * @brief Decode payload, this is like the middleware of the system. From USART1 (eventually). This
  * function is probably going to be extra beefy so might split it into specific processors depending
- * on the command... like put all start motor commands into their own function, etc. This is called
- * within the USART2 module
- * @param *command_buffer pointer to the command data
- * @param number_of_bytes the total number of bytes in the command
+ * on the command.
+ * @param *evt the fsm event struct with data
  * @return true if commmand successfully processed false if not
  */
-bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_bytes)
+void Command_ProcessPayload(s_fsm_event *evt)
 {
     // Preamble and postamble already packed, nothing makes it here without those being good.
-
-    // Now start cooking with specific commands.
-    // Byte 0 is the specific command
-    uint8_t command = command_buffer[0];
-
-    // Byte 3 is the number of data bytes, not including this byte
-    uint8_t num_data_bytes = command_buffer[1];
-
-    // Bytes 4 through N-3 is the command data, just pass a pointer of index 4 along
-    uint8_t *command_data = &command_buffer[2];
-
-    // Check if we are getting the expected number of bytes.
-    // 6 overhead bytes: command ID (1), num data bytes (1)
-    // This doesn't have much use other than error checking since commands are set numbers of bytes
-    if (num_data_bytes != number_of_bytes - 2)
+    if (evt->type != EVENT_PAYLOAD)
     {
-#if DEBUG_COMMS
-        USART2_SendString("Command num data bytes mismatch\r\n");
-#endif
-        return false;
+        // Shouldn't be called elsewhere
+        USART2_SendString("Non payload event passed into command processor");
+        return;
     }
 
     // Dispatch functions for handling different things
-    switch (command)
+    switch (evt->command_id)
     {
         /**
          * Commands 0-15 are not used (no reason tbh, bad vibes)
@@ -76,7 +59,7 @@ bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_bytes)
 
         // CMD 16: Single Motor Start. Hex is 0x10
         case 16:
-            Command_16(command_data);
+            Command_16(evt->data);
 #if DEBUG_COMMS
             USART2_SendString("CMD16 received\r\n");
 #endif
@@ -93,15 +76,15 @@ bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_bytes)
         {
 #if DEBUG_COMMS
             USART2_SendString("Unexpected command type:");
-            USART2_SendInt32((uint32_t)command);
+            USART2_SendInt32((uint32_t)evt->command_id);
             USART2_SendString("\r\n");
 #endif
-            return false;
+            return;
         }
     }
 
     // Fallthrough, return true because nothing bad happened
-    return true;
+    return;
 }
 
 /**
