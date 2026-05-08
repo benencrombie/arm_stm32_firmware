@@ -11,8 +11,6 @@
 #include "GPIO.h"
 #include "main.h"
 
-// TODO eventually use USART1 for SBC comms
-
 // Prototypes
 
 // Inits

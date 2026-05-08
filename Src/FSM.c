@@ -7,8 +7,8 @@
  *
  * Architecture:
  * Tick at 1 Hz: drives sub fsms
- * Tick at 1000 Hz: drives sub fsms and handles state transitions
- * Tick at System Hz (84 MHz): drives sub fsms
+ * Tick at 1000 Hz: handles state transitions and drives sub fsms
+ * Tick at System Hz (84 MHz): handles state entry actions and drives sub fsms
  */
 
 #include "FSM.h"

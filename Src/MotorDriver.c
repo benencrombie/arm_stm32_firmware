@@ -14,13 +14,6 @@ prevents there being a desync between the timer and 1000 Hz ticker.
 #include "USART.h"
 #include "main.h"
 
-// TODOs
-// I haven't thought about it yuet but the FSM will probably break if you pass a small target steps
-// in, since steps are controlled by the interrupt and actual accel/decel is controlled by time.
-// Probably will be a headache to build out, so maybe mitigate this in the UART comms (from
-// raspberry pi). Consider adding a single step command to nudge the motor a tick without a
-// specified speed
-
 // Prototypes
 static void Motors_Comms_MotorActive(uint8_t motor);
 static void Motors_Comms_MotorInactive(uint8_t motor);
