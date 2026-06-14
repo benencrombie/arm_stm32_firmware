@@ -45,17 +45,8 @@ static void PWM_Init_TIM2(void)
     TIM2->CCMR1 |= (0x06 << 12); // PWM mode 1
     TIM2->CCMR1 |= (0x01 << 11); // enable preload
 
-    // Configure PWM on ch3. CCMR2 contains ch3 and ch4
-    // Ch3 is its 7:0 of this register
-    TIM2->CCMR2 &= ~(0xFF << 0); // clear ch3
-    TIM2->CCMR2 |= (0x06 << 4);  // PWM mode 1
-    TIM2->CCMR2 |= (0x01 << 3);  // output compare preload
-
     // Set duty cycle for ch2. Will be reset anyway, dont think i need to initialize?
     TIM2->CCR2 = 500; // Defaulting. this will be changed when starting a pwm
-
-    // Set the duty cycle for ch3
-    TIM2->CCR3 = 500; // Defaulting. this will be changed when starting a pwm
 
     // Enable preload. This allows speed to be adjusted mid cycle smoothly
     // Added this in and speed transitions are a lot cleaner
@@ -69,6 +60,9 @@ static void PWM_Init_TIM2(void)
 
     // Enable interrupt
     TIM2->DIER |= TIM_DIER_UIE;
+
+    // Set priority behind USART
+    NVIC_SetPriority(TIM2_IRQn, 1);
 
     // Enable NVIC for interrupt
     NVIC_EnableIRQ(TIM2_IRQn);
@@ -86,7 +80,6 @@ static void PWM_Init_TIM3(void)
 {
     // PWMs used here
     // PA6 on channel 1, for MTR1 step
-    // PA7 on channel 2, for MTR5 step
 
     // Enable TIM3 clock
     RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;
@@ -102,16 +95,8 @@ static void PWM_Init_TIM3(void)
     TIM3->CCMR1 |= (0x06 << 4);  // PWM mode 1
     TIM3->CCMR1 |= (0x01 << 3);  // output compare preload
 
-    // Configure PWM on ch2. Bits 15:8 of same register
-    TIM3->CCMR1 &= ~(0xFF << 8); // clear ch2
-    TIM3->CCMR1 |= (0x06 << 12); // PWM mode 1
-    TIM3->CCMR1 |= (0x01 << 11); // output compare preload
-
     // Set duty cycle for ch1
     TIM3->CCR1 = 500;
-
-    // Set duty cycle for ch2
-    TIM3->CCR2 = 500;
 
     // Enable ARR preload
     TIM3->CR1 |= TIM_CR1_ARPE;
@@ -124,6 +109,9 @@ static void PWM_Init_TIM3(void)
 
     // Enable interrupt
     TIM3->DIER |= TIM_DIER_UIE;
+
+    // Set priority behind USART
+    NVIC_SetPriority(TIM3_IRQn, 1);
 
     // Enable NVIC for interrupt
     NVIC_EnableIRQ(TIM3_IRQn);
@@ -171,6 +159,9 @@ static void PWM_Init_TIM4(void)
     // Enable interrupt
     TIM4->DIER |= TIM_DIER_UIE;
 
+    // Set priority behind USART
+    NVIC_SetPriority(TIM4_IRQn, 1);
+
     // Enable NVIC for interrupt
     NVIC_EnableIRQ(TIM4_IRQn);
 
@@ -217,11 +208,113 @@ static void PWM_Init_TIM5(void)
     // Enable interrupt
     TIM5->DIER |= TIM_DIER_UIE;
 
+    // Set priority behind USART
+    NVIC_SetPriority(TIM5_IRQn, 1);
+
     // Enable NVIC for interrupt
     NVIC_EnableIRQ(TIM5_IRQn);
 
     // Start the timer
     TIM5->CR1 |= TIM_CR1_CEN;
+}
+
+/**
+ * @brief init timer 9 for pwm
+ * @param void
+ * @return void
+ */
+static void PWM_Init_TIM10(void)
+{
+    // TODO haven't tried this out yet
+
+    // PWMs used here
+    // Just PA0 on channel 1, for MTR3 step
+
+    // Enable TIM10 clock
+    RCC->APB2ENR |= RCC_APB2ENR_TIM10EN;
+
+    // Set PSC, prescaling
+    TIM10->PSC = TIM10_PRESC;
+
+    // Set ARR, auto reload register
+    TIM10->ARR = (uint16_t)MAX_ARR;
+
+    // Configure PWM on ch1. Bits 7:0
+    TIM10->CCMR1 &= ~(0xFF << 0); // clear ch1
+    TIM10->CCMR1 |= (0x06 << 4);  // PWM mode 1
+    TIM10->CCMR1 |= (0x01 << 3);  // output compare preload
+
+    // Set duty cycle for ch1
+    TIM10->CCR1 = 500;
+
+    // Enable ARR preload
+    TIM10->CR1 |= TIM_CR1_ARPE;
+
+    // Load up new config in the registers
+    TIM10->EGR |= TIM_EGR_UG;
+
+    // Clear pending interrupt to ensure there isn't a pending one
+    TIM10->SR &= ~TIM_SR_UIF;
+
+    // Enable interrupt
+    TIM10->DIER |= TIM_DIER_UIE;
+
+    // Set priority behind USART
+    NVIC_SetPriority(TIM1_UP_TIM10_IRQn, 1);
+
+    // Enable NVIC for interrupt
+    NVIC_EnableIRQ(TIM1_UP_TIM10_IRQn);
+
+    // Start the timer
+    TIM10->CR1 |= TIM_CR1_CEN;
+}
+
+/**
+ * @brief init timer 12 for pwm
+ * @param void
+ * @return void
+ */
+static void PWM_Init_TIM11(void)
+{
+    // TODO haven't tested this
+
+    // Enable TIM11 clock
+    RCC->APB2ENR |= RCC_APB2ENR_TIM11EN;
+
+    // Set PSC, prescaling
+    TIM11->PSC = TIM11_PRESC;
+
+    // Set ARR, auto reload register
+    TIM11->ARR = (uint16_t)MAX_ARR;
+
+    // Configure PWM on ch1. Bits 7:0
+    TIM11->CCMR1 &= ~(0xFF << 0); // clear ch1
+    TIM11->CCMR1 |= (0x06 << 4);  // PWM mode 1
+    TIM11->CCMR1 |= (0x01 << 3);  // output compare preload
+
+    // Set duty cycle for ch1
+    TIM11->CCR1 = 500;
+
+    // Enable ARR preload
+    TIM11->CR1 |= TIM_CR1_ARPE;
+
+    // Load up new config in the registers
+    TIM11->EGR |= TIM_EGR_UG;
+
+    // Clear pending interrupt to ensure there isn't a pending one
+    TIM11->SR &= ~TIM_SR_UIF;
+
+    // Enable interrupt
+    TIM11->DIER |= TIM_DIER_UIE;
+
+    // Set priority behind USART
+    NVIC_SetPriority(TIM1_TRG_COM_TIM11_IRQn, 1);
+
+    // Enable NVIC for interrupt
+    NVIC_EnableIRQ(TIM1_TRG_COM_TIM11_IRQn);
+
+    // Start the timer
+    TIM11->CR1 |= TIM_CR1_CEN;
 }
 
 /**
@@ -235,6 +328,8 @@ void PWM_Initialize(void)
     PWM_Init_TIM3();
     PWM_Init_TIM4();
     PWM_Init_TIM5();
+    PWM_Init_TIM10();
+    PWM_Init_TIM11();
 }
 
 /**
@@ -259,10 +354,10 @@ void PWM_EnableChannel(e_MotorNum motor_number)
             TIM5->CCER |= TIM_CCER_CC1E; // enable channel 1
             break;
         case M4:
-            TIM2->CCER |= TIM_CCER_CC3E; // enable channel 3
+            TIM10->CCER |= TIM_CCER_CC1E; // enable channel 1
             break;
         case M5:
-            TIM3->CCER |= TIM_CCER_CC2E; // enable channel 2
+            TIM10->CCER |= TIM_CCER_CC1E; // enable channel 1
             break;
     }
 }
@@ -289,10 +384,10 @@ void PWM_DisableChannel(e_MotorNum motor_number)
             TIM5->CCER &= ~TIM_CCER_CC1E; // disable channel 1
             break;
         case M4:
-            TIM2->CCER &= ~TIM_CCER_CC3E; // disable channel 3
+            TIM10->CCER &= ~TIM_CCER_CC1E; // disable channel 1
             break;
         case M5:
-            TIM3->CCER &= ~TIM_CCER_CC2E; // disable channel 2
+            TIM11->CCER &= ~TIM_CCER_CC1E; // disable channel 1
             break;
     }
 }

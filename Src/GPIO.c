@@ -9,9 +9,14 @@
  */
 
 #include "GPIO.h"
+#include "FSM.h"
 #include "main.h"
 
-bool f_test_pin_set = false; // Variable used for testing pin hooked up to LED
+// inits
+bool f_test_pin_set            = false; // Variable used for testing pin hooked up to LED
+uint16_t jeff_debounce_counter = 0;     // Debounce counter for the button that I named jeff.
+uint16_t todd_debounce_counter = 0;     // I named this one Todd
+uint16_t bart_debounce_counter = 0;     // I named this one Bart
 
 /**
  * @brief Enable GPIO port A/B/C clocks
@@ -155,12 +160,19 @@ void GPIO_Initialize(void)
     GPIO_Pin_Init(MTR_DIR_PORT, MTR5_DIR_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
                   OUT_AFR);
 
-    // // Initialize Standard Inputs
-    // uint8_t IN_MODER   = 0x00; // 00 is input mode
-    // uint8_t IN_OTYPER  = 0x00; // 00 is push-pull
-    // uint8_t IN_OSPEEDR = 0x03; // 11 is very high speed
-    // uint8_t IN_PUPDR   = 0x00; // 00 is no pu/pd
-    // uint8_t IN_AFR     = 0x00; // not relevant for standard ins
+    // Initialize Standard Inputs
+    uint8_t IN_MODER   = 0x00; // 00 is input mode
+    uint8_t IN_OTYPER  = 0x00; // 00 is push-pull
+    uint8_t IN_OSPEEDR = 0x03; // 11 is very high speed
+    uint8_t IN_PUPDR   = 0x00; // 00 is no pu/pd
+    uint8_t IN_AFR     = 0x00; // not relevant for standard ins
+
+    GPIO_Pin_Init(BUTTON_JEFF_PORT, BUTTON_JEFF_PIN, IN_MODER, IN_OTYPER, IN_OSPEEDR, IN_PUPDR,
+                  IN_AFR);
+    GPIO_Pin_Init(BUTTON_TODD_PORT, BUTTON_TODD_PIN, IN_MODER, IN_OTYPER, IN_OSPEEDR, IN_PUPDR,
+                  IN_AFR);
+    GPIO_Pin_Init(BUTTON_BART_PORT, BUTTON_BART_PIN, IN_MODER, IN_OTYPER, IN_OSPEEDR, IN_PUPDR,
+                  IN_AFR);
 
     // // Initialize Analogs
     // uint8_t ANLG_MODER   = 0x03; // 11 is analog mode
@@ -169,28 +181,28 @@ void GPIO_Initialize(void)
     // uint8_t ANLG_PUPDR   = 0x00; // 00 is no pu/pd
     // uint8_t ANLG_AFR     = 0x00; // not relevant for analog
 
-    // Initialize PWM/Timer configs
-    uint8_t PWM_MODER   = 0x02; // 10 is af mode
-    uint8_t PWM_OTYPER  = 0x00; // 00 is push-pull
-    uint8_t PWM_OSPEEDR = 0x03; // 11 is very high speed
-    uint8_t PWM_PUPDR   = 0x00; // 00 is no pu/pd
-    uint8_t PWM_AFR     = 0x01; // AF1 applies to motor STEPs 0 and 4
+    // NOTE: I'm initializing motor steps as a standard output to avoid spurious ticks/noise. Pins
+    // are reconfigured as PWMs upon starting a motor.
+    GPIO_Pin_Init(MTR0_STEP_PORT, MTR0_STEP_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+    GPIO_Pin_Init(MTR1_STEP_PORT, MTR1_STEP_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+    GPIO_Pin_Init(MTR2_STEP_PORT, MTR2_STEP_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+    GPIO_Pin_Init(MTR3_STEP_PORT, MTR3_STEP_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+    GPIO_Pin_Init(MTR4_STEP_PORT, MTR4_STEP_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
+    GPIO_Pin_Init(MTR5_STEP_PORT, MTR5_STEP_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
+                  OUT_AFR);
 
-    GPIO_Pin_Init(MTR0_STEP_PORT, MTR0_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
-                  PWM_AFR);
-    GPIO_Pin_Init(MTR4_STEP_PORT, MTR4_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
-                  PWM_AFR);
-
-    PWM_AFR = 0x02; // AF2 applies to motor STEPs 1,2,3, and 5
-
-    GPIO_Pin_Init(MTR1_STEP_PORT, MTR1_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
-                  PWM_AFR);
-    GPIO_Pin_Init(MTR2_STEP_PORT, MTR2_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
-                  PWM_AFR);
-    GPIO_Pin_Init(MTR3_STEP_PORT, MTR3_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
-                  PWM_AFR);
-    GPIO_Pin_Init(MTR5_STEP_PORT, MTR5_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
-                  PWM_AFR);
+    // Clear all step pins to avoid an initial first tick on init
+    GPIO_Clear(MTR0_STEP_PORT, MTR0_STEP_PIN);
+    GPIO_Clear(MTR1_STEP_PORT, MTR1_STEP_PIN);
+    GPIO_Clear(MTR2_STEP_PORT, MTR2_STEP_PIN);
+    GPIO_Clear(MTR3_STEP_PORT, MTR3_STEP_PIN);
+    GPIO_Clear(MTR4_STEP_PORT, MTR4_STEP_PIN);
+    GPIO_Clear(MTR5_STEP_PORT, MTR5_STEP_PIN);
 
     // Initialize UARTs
     uint8_t UART_MODER   = 0x02; // 10 is af mode
@@ -210,6 +222,93 @@ void GPIO_Initialize(void)
 
     // I2C/SPI/Other peripherals? None yet
 }
+
+/**
+ * @brief GPIO 1000 Hz service loop, checks for button presses and builds in debouncer
+ * @param void
+ * @return void
+ */
+void GPIO_Tick1000Hz(void)
+{
+    /**
+     * Jeff button, does this that and this
+     */
+    if (GPIO_ReadInput(BUTTON_JEFF_PORT, BUTTON_JEFF_PIN))
+    {
+        // Increase the counter on the millisecond
+        jeff_debounce_counter++;
+
+        if (jeff_debounce_counter >= GPIO_DEBOUNCE_MIN)
+        {
+            // Queue up a jeff button hit event, no event data so init to 0s
+            s_fsm_event evt = {0};
+            evt.type        = EVENT_JEFFBUTTONPRESS;
+            FSM_AddEventToQueue(evt);
+
+            // Don't reset the counter since I don't want this event to be spammed if I hold the
+            // button down
+        }
+    }
+    else
+    {
+        // Set to 0, button is lifted or just not pressed
+        jeff_debounce_counter = 0;
+    }
+
+    /**
+     * Todd button, does that this and that
+     */
+    if (GPIO_ReadInput(BUTTON_TODD_PORT, BUTTON_TODD_PIN))
+    {
+        // Increase the counter on the millisecond
+        todd_debounce_counter++;
+
+        if (todd_debounce_counter >= GPIO_DEBOUNCE_MIN)
+        {
+            // Queue up a jeff button hit event
+            s_fsm_event evt = {0};
+            evt.type        = EVENT_TODDBUTTONPRESS;
+            FSM_AddEventToQueue(evt);
+
+            // Don't reset the counter since I don't want this event to be spammed if I hold the
+            // button down
+        }
+    }
+    else
+    {
+        // Set to 0, button is lifted or just not pressed
+        todd_debounce_counter = 0;
+    }
+
+    /**
+     * Bart button, does that this and that
+     */
+    if (GPIO_ReadInput(BUTTON_BART_PORT, BUTTON_BART_PIN))
+    {
+        // Increase the counter on the millisecond
+        bart_debounce_counter++;
+
+        if (bart_debounce_counter >= GPIO_DEBOUNCE_MIN)
+        {
+            // Queue up a jeff button hit event
+            s_fsm_event evt = {0};
+            evt.type        = EVENT_BARTBUTTONPRESS;
+            FSM_AddEventToQueue(evt);
+
+            // Don't reset the counter since I don't want this event to be spammed if I hold the
+            // button down
+        }
+    }
+    else
+    {
+        // Set to 0, button is lifted or just not pressed
+        bart_debounce_counter = 0;
+    }
+}
+
+/**
+ * Testing actions
+ */
 
 /**
  * @brief toggle the testing pin, used for testing/validating stuff is happening

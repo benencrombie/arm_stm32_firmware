@@ -2,7 +2,8 @@
  * filename: Comms.c
  * author: Benen Crombie
  *
- * This module contains all serial comms received over USART (from desktop or raspberry pi)
+ * This module contains all serial comms received over USART (from desktop or raspberry pi).
+ * This should end with adding an event to the queue
  */
 
 #include "FSM.h"
@@ -13,7 +14,7 @@
 
 // Prototypes
 static void Command_16(uint8_t *data);
-static void Command_17(uint8_t *data);
+static void Command_19(uint8_t *data);
 
 /**
  * USART Comms TODO move this to a separate module like Comms.c/h, make this FSM module cleaner
@@ -24,66 +25,29 @@ static void Command_17(uint8_t *data);
  * Bytes 3 is the number of data bytes, not including this
  * Bytes 4:N-3 is the command data
  * Bytes N-2:N-1 is postable: 0x9999
+ *
+ * The preamble and postamble are tackled within the USART module so dont worry about that
  */
 
 /**
  * @brief Decode payload, this is like the middleware of the system. From USART1 (eventually). This
  * function is probably going to be extra beefy so might split it into specific processors depending
- * on the command... like put all start motor commands into their own function, etc.
- * @param *command_buffer pointer to the command data
- * @param number_of_bytes the total number of bytes in the command
+ * on the command.
+ * @param *evt the fsm event struct with data
  * @return true if commmand successfully processed false if not
  */
-bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_bytes)
+void Command_ProcessPayload(s_fsm_event *evt)
 {
-    // Bytes 0:1 is the preamble
-    uint16_t preamble = ((uint16_t)command_buffer[0] << 8) | (uint16_t)command_buffer[1];
-
-    // Bytes N-2:N-1 is the postamble (last two)
-    uint16_t postamble = ((uint16_t)(command_buffer[number_of_bytes - 2]) << 8) |
-                         (uint16_t)command_buffer[number_of_bytes - 1];
-
-    // If the preamble is garbo, exit and log
-    if (preamble != COMMAND_PREAMBLE)
+    // Preamble and postamble already packed, nothing makes it here without those being good.
+    if (evt->type != EVENT_PAYLOAD)
     {
-#if DEBUG_COMMS
-        USART2_SendString("Trash command preamble");
-#endif
-        return false;
-    }
-
-    // If the postamble is garbo, exit and log
-    if (postamble != COMMAND_POSTAMBLE)
-    {
-#if DEBUG_COMMS
-        USART2_SendString("Trash command postamble");
-#endif
-        return false;
-    }
-
-    // Now start cooking with specific commands.
-    // Byte 2 is the specific command
-    uint8_t command = command_buffer[2];
-
-    // Byte 3 is the number of data bytes, not including this byte
-    uint8_t num_data_bytes = command_buffer[3];
-
-    // Bytes 4 through N-3 is the command data, just pass a pointer of index 4 along
-    uint8_t *command_data = &command_buffer[4];
-
-    // Check if we are getting the expected number of bytes.
-    // 6 overhead bytes: preamble (2), command ID (1), num data bytes (1) and postamble (2)
-    // This doesn't have much use other than error checking since commands are set numbers of bytes
-    if (num_data_bytes != number_of_bytes - 6)
-    {
-#if DEBUG_COMMS
-        USART2_SendString("Command num data bytes mismatch");
-#endif
-        return false;
+        // Shouldn't be called elsewhere
+        USART2_SendString("Non payload event passed into command processor");
+        return;
     }
 
     // Dispatch functions for handling different things
-    switch (command)
+    switch (evt->command_id)
     {
         /**
          * Commands 0-15 are not used (no reason tbh, bad vibes)
@@ -93,19 +57,20 @@ bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_bytes)
          * Commands 16-31 are motor related
          */
 
-        // CMD 16: Single Motor Start
+        // CMD 16: Single Motor Start. Hex is 0x10
         case 16:
-            Command_16(command_data);
+            Command_16(evt->data);
 #if DEBUG_COMMS
-            USART2_SendString("CMD16 received");
+            USART2_SendString("CMD16 received\r\n");
 #endif
             break;
 
-        // CMD 17: Multi Motor Start
-        case 17:
-            Command_17(command_data);
+        // CMD 19: Multi Motor Start. Hex is 0x13
+        // Used for multimotor motion planning
+        case 19:
+            Command_19(evt->data);
 #if DEBUG_COMMS
-            USART2_SendString("CMD17 received");
+            USART2_SendString("CMD19 received\r\n");
 #endif
             break;
 
@@ -118,14 +83,15 @@ bool Command_ProcessPayload(uint8_t *command_buffer, uint8_t number_of_bytes)
         {
 #if DEBUG_COMMS
             USART2_SendString("Unexpected command type:");
-            USART2_SendInt32((uint32_t)command);
+            USART2_SendInt32((uint32_t)evt->command_id);
+            USART2_SendString("\r\n");
 #endif
-            return false;
+            return;
         }
     }
 
     // Fallthrough, return true because nothing bad happened
-    return true;
+    return;
 }
 
 /**
@@ -166,12 +132,143 @@ static void Command_16(uint8_t *data)
 }
 
 /**
- * @brief Command 17: MultiMotorStart
+ * @brief Command 17: MultiMotorStart, start all motors all in one go
  * @param data command data
  * @param number_of_bytes self explanatory
  * @return void
  */
-static void Command_17(uint8_t *data)
+static void Command_19(uint8_t *data)
 {
-    // TODO later
+    // Motor selection: first byte is packed with which motors to start (Bits 0:5 for motors 0-5)
+    uint8_t first_byte = data[0];
+
+    // Parse each bit to see what motors to start
+    bool start_m0 = first_byte & 0x04; // 0000 0100
+    bool start_m1 = first_byte & 0x08; // 0000 1000
+    bool start_m2 = first_byte & 0x10; // 0001 0000
+    bool start_m3 = first_byte & 0x20; // 0010 0000
+    bool start_m4 = first_byte & 0x40; // 0100 0000
+    bool start_m5 = first_byte & 0x80; // 1000 0000
+
+    // DIR: second byte is packed with the motor DIRs (Bits 0:5 for Motors 0-5)
+    uint8_t second_byte = data[1];
+
+    // Inits
+    uint8_t motor_dir;
+    uint16_t target_arr;
+    uint16_t target_steps;
+
+    //////////
+    // Motor 0
+    //////////
+
+    if (start_m0)
+    {
+        // Grab the motor direction
+        motor_dir = second_byte & 0x04;
+
+        // Bytes 1:2 is the target arr
+        target_arr = (data[1] << 8 | data[2]);
+
+        // Bytes 3:4 is target steps
+        target_steps = (data[3] << 8 | data[4]);
+
+        // Start motor 0
+        Motors_StartMotor(M0, motor_dir, target_arr, target_steps);
+    }
+
+    //////////
+    // Motor 1
+    //////////
+
+    if (start_m1)
+    {
+        // Grab the motor direction
+        motor_dir = second_byte & 0x08;
+
+        // Bytes 5:6 is the target arr
+        target_arr = (data[5] << 8 | data[6]);
+
+        // Bytes 7:8 is target steps
+        target_steps = (data[7] << 8 | data[8]);
+
+        // Start motor 1
+        Motors_StartMotor(M1, motor_dir, target_arr, target_steps);
+    }
+
+    //////////
+    // Motor 2
+    //////////
+
+    if (start_m2)
+    {
+        // Grab the motor direction
+        motor_dir = second_byte & 0x10;
+
+        // Bytes 9:10 is the target arr
+        target_arr = (data[9] << 8 | data[10]);
+
+        // Bytes 11:12 is target steps
+        target_steps = (data[11] << 8 | data[12]);
+
+        // Start motor 2
+        Motors_StartMotor(M2, motor_dir, target_arr, target_steps);
+    }
+
+    //////////
+    // Motor 3
+    //////////
+
+    if (start_m3)
+    {
+        // Grab the motor direction
+        motor_dir = first_byte & 0x20;
+
+        // Bytes 13:14 is the target arr
+        target_arr = (data[13] << 8 | data[14]);
+
+        // Bytes 15:16 is target steps
+        target_steps = (data[15] << 8 | data[16]);
+
+        // Start motor 3
+        Motors_StartMotor(M3, motor_dir, target_arr, target_steps);
+    }
+
+    //////////
+    // Motor 4
+    //////////
+
+    if (start_m4)
+    {
+        // Grab the motor direction
+        motor_dir = first_byte & 0x40;
+
+        // Bytes 17:18 is the target arr
+        target_arr = (data[17] << 8 | data[18]);
+
+        // Bytes 19:20 is target steps
+        target_steps = (data[19] << 8 | data[20]);
+
+        // Start motor 4
+        Motors_StartMotor(M4, motor_dir, target_arr, target_steps);
+    }
+
+    //////////
+    // Motor 5
+    //////////
+
+    if (start_m5)
+    {
+        // Grab the motor direction
+        motor_dir = first_byte & 0x80;
+
+        // Bytes 21:22 is the target arr
+        target_arr = (data[21] << 8 | data[22]);
+
+        // Bytes 23:24 is target steps
+        target_steps = (data[23] << 8 | data[24]);
+
+        // Start motor 5
+        Motors_StartMotor(M5, motor_dir, target_arr, target_steps);
+    }
 }

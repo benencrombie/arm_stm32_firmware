@@ -2,23 +2,27 @@
  * filename: USART.c
  * author: Benen Crombie
  *
- * UART init and functions.
- * NOTE: Claude made most of this since USART is a common bare metal module
- * My design choice was to use a ring buffer since I don't expect our comms to be 1) a lot or 2)
- * overflow often.
+ * UART init and functions. Also includes some abstraction for grabbing Tx data and dumping decoded
+ * data to an event queue
  */
 
 #include "USART.h"
+#include "FSM.h"
 #include "GPIO.h"
 #include "main.h"
-
-// TODO eventually use USART1 for SBC comms
 
 // Prototypes
 
 // Inits
 s_USART1_TxBuffer USART1_TxRingBuf; // USART1 for raspberry pi comms
 s_USART2_TxBuffer USART2_TxRingBuf; // USART2 for debugging
+s_USART1_RxBuffer USART1_RxRingBuf; // idk if this will be used
+s_USART2_RxBuffer USART2_RxRingBuf; // Used for raspberry pi comms
+
+// USRAT state machine
+static e_usart2_rx_state state = WAIT_PREAMBLE1; // Init by waiting for the first preamble byte
+static uint8_t usart2_frame_buf[USART2_RX_BUFFER_SIZE + 1];
+static uint16_t usart2_frame_len = 0;
 
 /**
  * USART1
@@ -45,9 +49,12 @@ static void USART2_Initialize(void)
     // NOTE USART is on the APB1 bus clock (PCLK), which is the low speed peripheral clock.
     // I prescale by 16, making this clock 5.25 MHz
 
-    // Set buffer indices
-    USART2_TxRingBuf.head_write = 0;
-    USART2_TxRingBuf.tail_tx    = 0;
+    // Reset buffer indicies
+    USART2_TxRingBuf.head = 0;
+    USART2_TxRingBuf.tail = 0;
+
+    USART2_RxRingBuf.head = 0;
+    USART2_RxRingBuf.tail = 0;
 
     // Enable USART2 clock on the APB1
     RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
@@ -68,11 +75,20 @@ static void USART2_Initialize(void)
     // NOTE: Don't overthink or change this, this works fine and it's tested
     USART2->BRR = 5250000 / 115200;
 
+    // Set USART2 priority higher than timers
+    NVIC_SetPriority(USART2_IRQn, 0); // 0 is highest
+
     // Configure NVIC for interrupts
     NVIC_EnableIRQ(USART2_IRQn);
 
-    // Bit 3: TE, enable the TX
-    USART2->CR1 = USART_CR1_TE;
+    // CR1: Enable transmit, receive, and RX interrupt
+    USART2->CR1 = USART_CR1_TE |    // Transmit enable
+                  USART_CR1_RE |    // Receive enable
+                  USART_CR1_RXNEIE; // Enable the RX interrupt
+
+    // Claude suggestion, prevents spurious junk on power up
+    volatile uint8_t dummy = USART2->DR;
+    (void)dummy;
 
     // [39.8.1] Enable USART again
     USART2->CR1 |= USART_CR1_UE;
@@ -103,19 +119,19 @@ static bool USART2_AddByteToQueue(uint8_t data_byte)
     // If head + 1  equals tail, that means the buffer is full because tx can't keep up with write
 
     // Determine the next write index is, wrapping around the max index
-    uint16_t next_write_idx = (USART2_TxRingBuf.head_write + 1) % USART2_TX_BUFFER_SIZE;
+    uint16_t next_write_idx = (USART2_TxRingBuf.head + 1) % USART2_TX_BUFFER_SIZE;
 
     // If the next write index is the transmit index, the queue is full
-    if (next_write_idx == USART2_TxRingBuf.tail_tx)
+    if (next_write_idx == USART2_TxRingBuf.tail)
     {
         return false;
     }
 
     // Update the ring buffer with the new byte if not full
-    USART2_TxRingBuf.buffer[USART2_TxRingBuf.head_write] = data_byte;
+    USART2_TxRingBuf.buffer[USART2_TxRingBuf.head] = data_byte;
 
     // Increment the write index because a new byte has been added
-    USART2_TxRingBuf.head_write = next_write_idx;
+    USART2_TxRingBuf.head = next_write_idx;
 
     // [39.8.1], Bit 7: TXEIE, enable the ineterrupt so TX starts firing stuff
     USART2->CR1 |= USART_CR1_TXEIE; // 1 is enable
@@ -171,24 +187,157 @@ void USART2_SendInt32(uint32_t value)
 }
 
 /**
+ * @brief Tick the USART RX handler at system frequency. Reads rx bytes and picks up on command
+ * payloads
+ * @param void
+ * @return void
+ */
+void USART2_TickSys(void)
+{
+    // If the buffer is not full, grab the next byte
+    while (USART2_RxRingBuf.tail != USART2_RxRingBuf.head)
+    {
+        // Grab the byte from the buffer, this is added in interrupt
+        uint8_t byte = USART2_RxRingBuf.buffer[USART2_RxRingBuf.tail];
+
+        // Increment tail, looping ring buffer if necessary
+        USART2_RxRingBuf.tail = (USART2_RxRingBuf.tail + 1) % USART2_RX_BUFFER_SIZE;
+
+        switch (state)
+        {
+            // Before scanning for command, scan for the preamble byte.
+            case WAIT_PREAMBLE1:
+                // Big endian, so expect high byte first
+                if (byte == COMMAND_PREAMBLE_HIGH)
+                {
+                    state = WAIT_PREAMBLE2;
+                }
+                else
+                {
+                    // Junk data log it?
+                    USART2_SendString("Junk USART while waiting for first preamble\r\n");
+                }
+                break;
+
+            case WAIT_PREAMBLE2:
+                // Scan for second preamble byte
+                if (byte == 0x11)
+                {
+                    // Start counting the length of the frame and swap to receiving state
+                    state            = RECEIVING;
+                    usart2_frame_len = 0;
+                }
+                // Unexpected byte, go back to waiting for the first again
+                else
+                {
+                    // Junk data, log it?
+                    USART2_SendString("Junk USART while waiting for second preamble\r\n");
+                    state = WAIT_PREAMBLE1;
+                }
+                break;
+
+            case RECEIVING:
+                // This is the first postamble byte
+                // TODO maybe it could be actual payload data, maybe just save this as a temp var
+                if (byte == 0x99)
+                {
+                    // Wait for the second postamble byte
+                    state = WAIT_POSTAMBLE2;
+                }
+                else
+                {
+                    // Try to add the byte to the frame buffer
+                    if (usart2_frame_len < sizeof(usart2_frame_buf))
+                    {
+                        usart2_frame_buf[usart2_frame_len++] = byte;
+                    }
+                    else
+                    {
+                        // Overflow, log and reset/wait for new command
+                        USART2_SendString("USART2 frame buf overflow\r\n");
+                        state = WAIT_PREAMBLE1;
+                    }
+                }
+                break;
+
+            case WAIT_POSTAMBLE2:
+                // After second postamble byte is comfirmed, just decode the payloads
+                if (byte == 0x99)
+                {
+#if DEBUG_USART_RX
+                    USART2_SendString("Received a full command, processing now\r\n");
+#endif
+                    // Build the event for the FSM queue
+                    s_fsm_event evt = {0}; // init 0s
+                    evt.type        = EVENT_PAYLOAD;
+                    evt.command_id  = usart2_frame_buf[0];  // command is the first byte
+                    evt.data_len    = usart2_frame_len - 1; // This won't include the command byte
+
+                    // Copy over the payload bytes to event stack
+                    memcpy(evt.data, &usart2_frame_buf[1], evt.data_len);
+
+                    // Post the event. BOOM
+                    FSM_AddEventToQueue(evt);
+                }
+                // If teh second postamble byte isnt received, junk data
+                else
+                {
+                    USART2_SendString("Junk USART waiting for second postamble byte\r\n");
+                }
+
+                // Either way reset
+                state = WAIT_PREAMBLE1;
+                break;
+        }
+    }
+}
+
+/**
  * @brief function to handle advancing the USART2 queue. This will go in the IRQ function.
  * @param void
  * @return void
  */
-void USART_USART2_IRQHandler(void)
+void USART2_InterruptHandler(void)
 {
-    // Claude generated. This works
+    // Receive byte
+    if (USART2->SR & USART_SR_RXNE)
+    {
+        // Read the data register, this clears RXNE
+        uint8_t rx_data = USART2->DR;
+
+        // Get the next index of the ring buffer
+        uint16_t next_idx = (USART2_RxRingBuf.head + 1) % USART2_RX_BUFFER_SIZE;
+
+        // Check if the buffer is not full yet. I might also implement some control on the raspberry
+        // pi side to not fire too many commands too fast
+        if (next_idx != USART2_RxRingBuf.tail)
+        {
+            // Add byte to dat buffer
+            USART2_RxRingBuf.buffer[USART2_RxRingBuf.head] = rx_data;
+
+            // Increment the head
+            USART2_RxRingBuf.head = next_idx;
+        }
+
+        // The RX buffer is full. I think I can just log it through TX lol
+        else
+        {
+            USART2_SendString("USART2 Rx Buffer Full\r\n");
+        }
+    }
+
+    // Transmit byte
     if (USART2->SR & USART_SR_TXE)
     {
-        if (USART2_TxRingBuf.head_write != USART2_TxRingBuf.tail_tx)
+        if (USART2_TxRingBuf.head != USART2_TxRingBuf.tail)
         {
             // Write directly here
-            USART2->DR               = USART2_TxRingBuf.buffer[USART2_TxRingBuf.tail_tx];
-            USART2_TxRingBuf.tail_tx = (USART2_TxRingBuf.tail_tx + 1) % USART2_TX_BUFFER_SIZE;
+            USART2->DR            = USART2_TxRingBuf.buffer[USART2_TxRingBuf.tail];
+            USART2_TxRingBuf.tail = (USART2_TxRingBuf.tail + 1) % USART2_TX_BUFFER_SIZE;
         }
 
         // Disable if buffer now empty
-        if (USART2_TxRingBuf.head_write == USART2_TxRingBuf.tail_tx)
+        if (USART2_TxRingBuf.head == USART2_TxRingBuf.tail)
         {
             USART2->CR1 &= ~USART_CR1_TXEIE;
         }
