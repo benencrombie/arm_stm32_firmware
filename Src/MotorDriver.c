@@ -23,10 +23,12 @@ static void SingleMotor_Disable(s_MotorStruct *motor);
 e_MotorSystemState motor_system_state = MTRSYS_DISABLED;
 
 // Timer step counter
-volatile uint32_t tim2_step_counter = 0;
-volatile uint32_t tim3_step_counter = 0;
-volatile uint32_t tim4_step_counter = 0;
-volatile uint32_t tim5_step_counter = 0;
+volatile uint32_t tim2_step_counter  = 0;
+volatile uint32_t tim3_step_counter  = 0;
+volatile uint32_t tim4_step_counter  = 0;
+volatile uint32_t tim5_step_counter  = 0;
+volatile uint32_t tim10_step_counter = 0;
+volatile uint32_t tim11_step_counter = 0;
 
 // Decelerate flags, tells the FSM when to decel a motor, handled within 1000 Hz tick
 volatile uint8_t f_m0_decel = 0;
@@ -44,13 +46,20 @@ uint8_t f_m2_homed      = 0;
 uint8_t f_m3_homed      = 0;
 uint8_t f_m4_homed      = 0;
 uint8_t f_m5_homed      = 0;
-uint8_t m0_home_dir     = 0; // Homing direction, might want to specify this. Idk how this would be
-                             // automatically determined tho...
-uint8_t m1_home_dir = 0;
-uint8_t m2_home_dir = 0;
-uint8_t m3_home_dir = 0;
-uint8_t m4_home_dir = 0;
-uint8_t m5_home_dir = 0;
+uint8_t m0_home_dir     = 0;
+uint8_t m1_home_dir     = 0;
+uint8_t m2_home_dir     = 0;
+uint8_t m3_home_dir     = 0;
+uint8_t m4_home_dir     = 0;
+uint8_t m5_home_dir     = 0;
+
+// Motor pos trackers
+volatile uint16_t m0_pos = 0;
+volatile uint16_t m1_pos = 0;
+volatile uint16_t m2_pos = 0;
+volatile uint16_t m3_pos = 0;
+volatile uint16_t m4_pos = 0;
+volatile uint16_t m5_pos = 0;
 
 /**
  * Motor structs:
@@ -70,9 +79,10 @@ s_MotorStruct MOTOR0 = {
     .motor_approach_arr = M0_APPROACH_ARR,
     .motor_ramp_ms      = M0_RAMP_MS,
     .motor_ramp_ticks   = 0,
-    .motor_start_decel  = 0, // Calculated in init
-    .motor_decel_flag   = &f_m0_decel,
-    .motor_homed_flag   = &f_m0_homed,
+    .motor_start_decel =
+        0, // Calculated in init, kind of reworked this logic, maybe come back to later TODO
+    .motor_decel_flag = &f_m0_decel,
+    .motor_homed_flag = &f_m0_homed,
 };
 s_MotorStruct MOTOR1 = {
     .motor_num          = M1,
@@ -130,7 +140,7 @@ s_MotorStruct MOTOR3 = {
 };
 s_MotorStruct MOTOR4 = {
     .motor_num          = M4,
-    .motor_base_freq    = (uint32_t)APB1HZ / (uint32_t)TIM2_PRESC,
+    .motor_base_freq    = (uint32_t)APB2HZ / (uint32_t)TIM10_PRESC,
     .motor_state        = MTR_DISABLED,
     .motor_target_arr   = 0,
     .motor_curr_arr     = 0,
@@ -148,7 +158,7 @@ s_MotorStruct MOTOR4 = {
 };
 s_MotorStruct MOTOR5 = {
     .motor_num          = M5,
-    .motor_base_freq    = (uint32_t)APB1HZ / (uint32_t)TIM3_PRESC,
+    .motor_base_freq    = (uint32_t)APB2HZ / (uint32_t)TIM11_PRESC,
     .motor_state        = MTR_DISABLED,
     .motor_target_arr   = 0,
     .motor_curr_arr     = 0,
@@ -251,6 +261,7 @@ static bool SingleMotor_CalculateRoughDecelDist(s_MotorStruct *motor)
         // Getting some weird instances, just disable the entire motor
         SingleMotor_Disable(motor);
 
+        // Kinematics control will be handled by the pi, so this shouldn't happen
         USART2_SendString("TRYING TO START MOTOR #");
         USART2_SendInt32(motor->motor_num);
         USART2_SendString(
@@ -336,14 +347,6 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint8_t dir, uint3
 
                 USART2_SendString("Motor 0 already running, nuh uh\r\n");
             }
-
-            // If motor 4 is running, nuh uh
-            else if (MOTOR4.motor_state != MTR_BRAKED && MOTOR4.motor_state != MTR_DISABLED)
-            {
-                // Don't do that
-                f_illegal_motor_start = 1;
-                USART2_SendString("Tried to start motor 0, but motor 4 is running\r\n");
-            }
             else
             {
                 tim2_step_counter = 0;
@@ -358,14 +361,6 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint8_t dir, uint3
                 // Don't do that
                 f_illegal_motor_start = 1;
                 USART2_SendString("Motor 1 already running, nuh uh\r\n");
-            }
-            // If motor 5 is running, nuh uh
-            else if (MOTOR5.motor_state != MTR_BRAKED && MOTOR5.motor_state != MTR_DISABLED)
-            {
-                // Don't do that
-                f_illegal_motor_start = 1;
-
-                USART2_SendString("Tried to start motor 1, but motor 5 is running\r\n");
             }
             else
             {
@@ -417,15 +412,6 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint8_t dir, uint3
 
                 USART2_SendString("Motor 4 already running, nuh uh\r\n");
             }
-
-            // If motor 0 is running, nuh uh
-            else if (MOTOR0.motor_state != MTR_BRAKED && MOTOR0.motor_state != MTR_DISABLED)
-            {
-                // Don't do that
-                f_illegal_motor_start = 1;
-
-                USART2_SendString("Tried to start motor 4, but motor 0 is running\r\n");
-            }
             else
             {
                 tim2_step_counter = 0;
@@ -441,14 +427,6 @@ static void SingleMotor_StartWithTarget(s_MotorStruct *motor, uint8_t dir, uint3
                 f_illegal_motor_start = 1;
 
                 USART2_SendString("Motor 5 already running, nuh uh\r\n");
-            }
-            // If motor 1 is running, nuh uh
-            else if (MOTOR1.motor_state != MTR_BRAKED && MOTOR1.motor_state != MTR_DISABLED)
-            {
-                // Don't do that
-                f_illegal_motor_start = 1;
-
-                USART2_SendString("Tried to start motor 5, but motor 1 is running\r\n");
             }
             else
             {
@@ -580,20 +558,25 @@ static void Motors_SetStepsAsTimers(void)
     uint8_t PWM_OTYPER  = 0x00; // 00 is push-pull
     uint8_t PWM_OSPEEDR = 0x03; // 11 is very high speed
     uint8_t PWM_PUPDR   = 0x00; // 00 is no pu/pd
-    uint8_t PWM_AFR     = 0x01; // AF1 applies to motor STEPs 0 and 4
+    uint8_t PWM_AFR     = 0x01; // AF1 applies to motor STEP 0
 
     GPIO_Pin_Init(MTR0_STEP_PORT, MTR0_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
                   PWM_AFR);
-    GPIO_Pin_Init(MTR4_STEP_PORT, MTR4_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
-                  PWM_AFR);
 
-    PWM_AFR = 0x02; // AF2 applies to motor STEPs 1,2,3, and 5
+    // AF2 applies to motor STEPs 1,2,3, and 5
+    PWM_AFR = 0x02;
 
     GPIO_Pin_Init(MTR1_STEP_PORT, MTR1_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
                   PWM_AFR);
     GPIO_Pin_Init(MTR2_STEP_PORT, MTR2_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
                   PWM_AFR);
     GPIO_Pin_Init(MTR3_STEP_PORT, MTR3_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
+                  PWM_AFR);
+
+    // AF3 applies to motor STEPs 4 and 5
+    PWM_AFR = 0x03;
+
+    GPIO_Pin_Init(MTR4_STEP_PORT, MTR4_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
                   PWM_AFR);
     GPIO_Pin_Init(MTR5_STEP_PORT, MTR5_STEP_PIN, PWM_MODER, PWM_OTYPER, PWM_OSPEEDR, PWM_PUPDR,
                   PWM_AFR);
@@ -814,7 +797,7 @@ static void SingleMotor_HandleStateTransition(s_MotorStruct *motor)
             // this flag is set by a limit switch or something else in the future
             if (*(motor->motor_homed_flag) == 1)
             {
-                // clear the flag (do I want to do this?)
+                // clear the flag
                 *(motor->motor_homed_flag) = 0;
 
                 // Set the motor state to braked
@@ -1150,8 +1133,6 @@ void Motors_TIM2_IRQHandler(void)
             USART2_SendString("Current Step: ");
             USART2_SendInt32(tim2_step_counter);
             USART2_SendString("\r\n\n\n");
-            // // Unplug it
-            // GPIO_Set(MTR_EN_PORT, MOTOR0.motor_en_pin);
 #endif
             // Stop the motor, don't touch the en pin though
             PWM_DisableChannel(MOTOR0.motor_num);
@@ -1183,42 +1164,6 @@ void Motors_TIM2_IRQHandler(void)
             USART2_SendString("\r\n\n\n");
 #endif
             f_m0_decel = 1;
-        }
-    }
-    else if (MOTOR4.motor_state == MTR_APPROACH)
-    {
-        // Compare the step to target step
-        if (tim2_step_counter >= MOTOR4.motor_target_steps)
-        {
-#if DEBUG_MOTORS
-            USART2_SendString("M4 STOP\r\n");
-#endif
-
-            // Stop the motor, don't touch the en pin though
-            PWM_DisableChannel(MOTOR4.motor_num);
-
-            // NOTE set as GPIO output and clear to avoid floating behavior. This works... bruh
-            GPIO_Pin_Init(MTR4_STEP_PORT, MTR4_STEP_PIN, 0x01, 0x00, 0x03, 0x00, 0x00);
-
-            // Force the step port low, was seeing some glitches after braking
-            GPIO_Clear(MOTOR4.motor_step_port, MOTOR4.motor_step_pin);
-
-            // reset the counter
-            tim2_step_counter = 0;
-
-            // Make motor braked
-            MOTOR4.motor_state = MTR_BRAKED;
-        }
-    }
-    else if (MOTOR4.motor_state == MTR_ATSPEED)
-    {
-        // Check to raise the decel flag
-        if (tim2_step_counter >= MOTOR4.motor_start_decel)
-        {
-#if DEBUG_MOTORS
-            USART2_SendString("M4 Decel\r\n");
-#endif
-            f_m4_decel = 1;
         }
     }
 }
@@ -1277,42 +1222,6 @@ void Motors_TIM3_IRQHandler(void)
             USART2_SendString("M1 Decel\r\n");
 #endif
             f_m1_decel = 1;
-        }
-    }
-    else if (MOTOR5.motor_state == MTR_APPROACH)
-    {
-        // Compare the step to target step
-        if (tim3_step_counter >= MOTOR5.motor_target_steps)
-        {
-#if DEBUG_MOTORS
-            USART2_SendString("M5 STOP\r\n");
-#endif
-
-            // Stop the motor, don't touch the en pin though
-            PWM_DisableChannel(MOTOR5.motor_num);
-
-            // NOTE set as GPIO output and clear to avoid floating behavior. This works... bruh
-            GPIO_Pin_Init(MTR5_STEP_PORT, MTR5_STEP_PIN, 0x01, 0x00, 0x03, 0x00, 0x00);
-
-            // Force the step port low, was seeing some glitches after braking
-            GPIO_Clear(MOTOR5.motor_step_port, MOTOR5.motor_step_pin);
-
-            // reset the counter
-            tim3_step_counter = 0;
-
-            // Make motor braked
-            MOTOR5.motor_state = MTR_BRAKED;
-        }
-    }
-    else if (MOTOR5.motor_state == MTR_ATSPEED)
-    {
-        // Check to raise the decel flag
-        if (tim3_step_counter >= MOTOR5.motor_start_decel)
-        {
-#if DEBUG_MOTORS
-            USART2_SendString("M5 Decel\r\n");
-#endif
-            f_m5_decel = 1;
         }
     }
 }
@@ -1429,6 +1338,122 @@ void Motors_TIM5_IRQHandler(void)
             USART2_SendString("M3 Decel\r\n");
 #endif
             f_m3_decel = 1;
+        }
+    }
+}
+
+/**
+ * @brief Handle the tim10 interrupt
+ * @param void
+ * @return void
+ */
+void Motors_TIM10_IRQHandler(void)
+{
+    // Clear the interrupt flag
+    TIM10->SR &= ~TIM_SR_UIF;
+
+    // Increment step counter
+    tim10_step_counter++;
+
+#if DEBUG_INTERRUPT_TIMERS
+    USART2_SendString("TIM10:");
+    USART2_SendInt32(tim10_step_counter);
+    USART2_SendString("\r\n");
+#endif
+
+    // Look if either motor is approaching, then check to stop
+    if (MOTOR4.motor_state == MTR_APPROACH)
+    {
+        // Compare the step to target step
+        if (tim10_step_counter >= MOTOR4.motor_target_steps)
+        {
+#if DEBUG_MOTORS
+            USART2_SendString("M4 STOP\r\n");
+#endif
+
+            // Stop the motor, don't touch the en pin though
+            PWM_DisableChannel(MOTOR4.motor_num);
+
+            // NOTE set as GPIO output and clear to avoid floating behavior. This works... bruh
+            GPIO_Pin_Init(MTR4_STEP_PORT, MTR4_STEP_PIN, 0x01, 0x00, 0x03, 0x00, 0x00);
+
+            // Force the step port low, was seeing some glitches after braking
+            GPIO_Clear(MOTOR4.motor_step_port, MOTOR4.motor_step_pin);
+
+            // reset the counter
+            tim10_step_counter = 0;
+
+            // Make motor braked
+            MOTOR4.motor_state = MTR_BRAKED;
+        }
+    }
+    else if (MOTOR4.motor_state == MTR_ATSPEED)
+    {
+        // Check to raise the decel flag
+        if (tim10_step_counter >= MOTOR4.motor_start_decel)
+        {
+#if DEBUG_MOTORS
+            USART2_SendString("M4 Decel\r\n");
+#endif
+            f_m4_decel = 1;
+        }
+    }
+}
+
+/**
+ * @brief Handle the tim11 interrupt
+ * @param void
+ * @return void
+ */
+void Motors_TIM11_IRQHandler(void)
+{
+    // Clear the interrupt flag
+    TIM11->SR &= ~TIM_SR_UIF;
+
+    // Increment step counter
+    tim11_step_counter++;
+
+#if DEBUG_INTERRUPT_TIMERS
+    USART2_SendString("TIM11:");
+    USART2_SendInt32(tim11_step_counter);
+    USART2_SendString("\r\n");
+#endif
+
+    // Look if either motor is approaching, then check to stop
+    if (MOTOR5.motor_state == MTR_APPROACH)
+    {
+        // Compare the step to target step
+        if (tim11_step_counter >= MOTOR5.motor_target_steps)
+        {
+#if DEBUG_MOTORS
+            USART2_SendString("M5 STOP\r\n");
+#endif
+
+            // Stop the motor, don't touch the en pin though
+            PWM_DisableChannel(MOTOR5.motor_num);
+
+            // NOTE set as GPIO output and clear to avoid floating behavior.
+            GPIO_Pin_Init(MTR5_STEP_PORT, MTR5_STEP_PIN, 0x01, 0x00, 0x03, 0x00, 0x00);
+
+            // Force the step port low, was seeing some glitches after braking
+            GPIO_Clear(MOTOR5.motor_step_port, MOTOR5.motor_step_pin);
+
+            // reset the counter
+            tim11_step_counter = 0;
+
+            // Make motor braked
+            MOTOR5.motor_state = MTR_BRAKED;
+        }
+    }
+    else if (MOTOR5.motor_state == MTR_ATSPEED)
+    {
+        // Check to raise the decel flag
+        if (tim11_step_counter >= MOTOR5.motor_start_decel)
+        {
+#if DEBUG_MOTORS
+            USART2_SendString("M5 Decel\r\n");
+#endif
+            f_m5_decel = 1;
         }
     }
 }

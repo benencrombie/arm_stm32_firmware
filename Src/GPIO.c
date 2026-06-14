@@ -181,8 +181,8 @@ void GPIO_Initialize(void)
     // uint8_t ANLG_PUPDR   = 0x00; // 00 is no pu/pd
     // uint8_t ANLG_AFR     = 0x00; // not relevant for analog
 
-    // NOTE: I'm initializing this as a standard output to avoid spurious ticks/noise. Pins are
-    // reconfigured as PWMs upon starting a motor.
+    // NOTE: I'm initializing motor steps as a standard output to avoid spurious ticks/noise. Pins
+    // are reconfigured as PWMs upon starting a motor.
     GPIO_Pin_Init(MTR0_STEP_PORT, MTR0_STEP_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,
                   OUT_AFR);
     GPIO_Pin_Init(MTR1_STEP_PORT, MTR1_STEP_PIN, OUT_MODER, OUT_OTYPER, OUT_OSPEEDR, OUT_PUPDR,

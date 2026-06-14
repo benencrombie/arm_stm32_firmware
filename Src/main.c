@@ -7,14 +7,14 @@
 #include "USART.h"
 #include "stm32f446xx.h"
 
-// prototypes
-static void SystemClock_Config_84MHz(void);
-// interrupts (also prototypes)
-void TIM2_IRQHandler(void);   // Motors 0 and 4 steps
-void TIM3_IRQHandler(void);   // Motors 1 and 5 steps
-void TIM4_IRQHandler(void);   // Motor 2 steps
-void TIM5_IRQHandler(void);   // Motor 3 steps
-void USART2_IRQHandler(void); // Debug comms TX
+// ISRs
+void TIM2_IRQHandler(void);               // Motors 0 step
+void TIM3_IRQHandler(void);               // Motors 1 step
+void TIM4_IRQHandler(void);               // Motor 2 step
+void TIM5_IRQHandler(void);               // Motor 3 step
+void TIM1_UP_TIM10_IRQHandler(void);      // Motor 4 step
+void TIM1_TRG_COM_TIM11_IRQHandler(void); // Motor 5 step
+void USART2_IRQHandler(void);             // Debug comms TX
 
 // Initialize ms to the next second, or however frequently we want to do stuff. Highest frequency
 // activities as system speed (84 MHz) and milliseconds (1000 Hz)
@@ -89,84 +89,6 @@ int main(void)
 }
 
 /**
- * System Clock Configuration
- *
- * Main tick, peripheral clocks, etc.
- */
-
-/**
- * @brief configure the clock to be 84MHz (stm32f446 is capable), default is 16MHz. Keeping this in
- * main for visibility
- * @param void
- * @return void
- */
-static void SystemClock_Config_84MHz(void)
-{
-    // NOTE help from claude with this. Similar to what HAL does but stripped down
-
-    // enable power interface clock
-    RCC->APB1ENR |= RCC_APB1ENR_PWREN;
-
-    // voltage scaling (needed for higher clocks)
-    PWR->CR |= PWR_CR_VOS;
-
-    // Flash config (2 wait states for 84 MHz)
-    FLASH->ACR = FLASH_ACR_PRFTEN | FLASH_ACR_ICEN | FLASH_ACR_DCEN | FLASH_ACR_LATENCY_2WS;
-
-    // enable HSI
-    RCC->CR |= RCC_CR_HSION;
-    while (!(RCC->CR & RCC_CR_HSIRDY))
-        ;
-
-    // Don't touch this
-    RCC->PLLCFGR = (16 << 0) |  // PLLM is bits [5:0]
-                   (336 << 6) | // PLLN is bits [14:6]
-                   (7 << 24) |  // PLLQ is bits [27:24]
-                   RCC_PLLCFGR_PLLSRC_HSI;
-
-    // PLLP = 4 (encoded as 01 in bits 17:16 on F4)
-    RCC->PLLCFGR &= ~(3 << 16);
-    RCC->PLLCFGR |= (1 << 16);
-
-    // enable PLL
-    RCC->CR |= RCC_CR_PLLON;
-    while (!(RCC->CR & RCC_CR_PLLRDY))
-        ;
-
-    /**
-     * Peripheral bus clocks
-     *
-     * HCLK = 84 MHz
-     * APB1 (PCLK1) = 5.25 MHz
-     * - Motor PWMs (TIM2, TIM3, TIM4, TIM5)
-     * APB2 (PCLK2) = 84 MHz
-     * SYSCLK = 84 MHz
-     */
-
-    // AHB, don't prescale, so HCLK = 84 MHz
-    RCC->CFGR &= ~RCC_CFGR_HPRE;
-    RCC->CFGR |= RCC_CFGR_HPRE_DIV1;
-
-    // APB1, prescale by /16, so PCLK1 = 5.25 MHz. Using these for motor timers, so not super high
-    // speed
-    RCC->CFGR &= ~RCC_CFGR_PPRE1;
-    RCC->CFGR |= RCC_CFGR_PPRE1_DIV16;
-
-    // APB2, prescale by /1, so PCLK2 = 84 MHz
-    RCC->CFGR &= ~RCC_CFGR_PPRE2;
-    RCC->CFGR |= RCC_CFGR_PPRE2_DIV1;
-
-    // set SYSCLK source from PLL
-    RCC->CFGR &= ~RCC_CFGR_SW;
-    RCC->CFGR |= RCC_CFGR_SW_PLL;
-    while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL)
-        ;
-
-    // update CMSIS clock variable
-    SystemCoreClockUpdate();
-}
-
-/**
  * ISR Operations
  *
  * TIM2 - Motors 0 and 4
@@ -205,6 +127,22 @@ void TIM4_IRQHandler(void)
 void TIM5_IRQHandler(void)
 {
     Motors_TIM5_IRQHandler();
+}
+
+/**
+ * @brief TIM10 interrupt handler
+ */
+void TIM1_UP_TIM10_IRQHandler(void)
+{
+    Motors_TIM10_IRQHandler();
+}
+
+/**
+ * @brief TIM11 interrupt handler
+ */
+void TIM1_TRG_COM_TIM11_IRQHandler(void)
+{
+    Motors_TIM11_IRQHandler();
 }
 
 /**

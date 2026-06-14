@@ -17,7 +17,8 @@
 
 // Globally used defines
 #define SYSHZ  (84000000) // 84 MHz
-#define APB1HZ (5250000)  // Prescaled by 128 for now, artbitratily chosen
+#define APB1HZ (5250000)  // Prescaled by 16 for now, artbitratily chosen
+#define APB2HZ (84000000) // 84 MHz
 
 // Global vars
 extern uint32_t SystemCoreClock; // Current clock freq (adjusted to 84 MHz), making global incase
@@ -136,13 +137,11 @@ void SystemCoreClockUpdate(void);
 // Motor 3, TIM5
 #define MTR3_STEP_PORT GPIOA
 #define MTR3_STEP_PIN  (0) // PA0, AF2, TIM5_CH1
-// Motor 4, TIM2 (reused)
+// Motor 4, T
 #define MTR4_STEP_PORT GPIOB
-// TODO TODO TODO need to find another pin for this since PA2 is USART2TX... Might take a minute to
-// refactor lol
-#define MTR4_STEP_PIN (2) // PB2, AF1, TIM2_CH4
+#define MTR4_STEP_PIN  (8) // PB8, AF3, TIM10_CH1
 // Motor 5, TIM3 (reused)
-#define MTR5_STEP_PORT GPIOA
-#define MTR5_STEP_PIN  (7) // PA7, AF2, TIM3_CH2
+#define MTR5_STEP_PORT GPIOB
+#define MTR5_STEP_PIN  (9) // PB9, AF3, TIM11_CH1
 
 #endif

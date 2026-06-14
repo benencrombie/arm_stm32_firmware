@@ -152,11 +152,6 @@ void FSM_Tick1Hz(void)
         }
         case STATE_READY:
         {
-            ////////////////
-            // Testing block
-
-            ////////////////
-
             /**
              * Handle all sub fsms
              */

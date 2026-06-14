@@ -54,7 +54,7 @@
 typedef enum
 {
     MTRSYS_DISABLED,      // Can't do anything with motors
-    MTRSYS_RUNNING,       // Can do everything with motors
+    MTRSYS_RUNNING,       // Can do everything with motors, including homing
     MTRSYS_EMERGENCY_STOP // STOP EVERYTHING NOW, go to disabled after
 } e_MotorSystemState;
 
@@ -117,5 +117,7 @@ void Motors_TIM2_IRQHandler(void);
 void Motors_TIM3_IRQHandler(void);
 void Motors_TIM4_IRQHandler(void);
 void Motors_TIM5_IRQHandler(void);
+void Motors_TIM10_IRQHandler(void);
+void Motors_TIM11_IRQHandler(void);
 
 #endif

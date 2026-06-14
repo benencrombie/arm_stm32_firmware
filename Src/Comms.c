@@ -65,7 +65,14 @@ void Command_ProcessPayload(s_fsm_event *evt)
 #endif
             break;
 
-        // Don't use 16 (0x11) because it mighttttt get confused with preamble, idk
+        // CMD 19: Multi Motor Start. Hex is 0x13
+        // Used for multimotor motion planning
+        case 19:
+            Command_19(evt->data);
+#if DEBUG_COMMS
+            USART2_SendString("CMD19 received\r\n");
+#endif
+            break;
 
         /**
          * Commands 240-255 are not used (no reason tbh, bad vibes)
@@ -125,12 +132,143 @@ static void Command_16(uint8_t *data)
 }
 
 /**
- * @brief Command 17: MultiMotorStart
+ * @brief Command 17: MultiMotorStart, start all motors all in one go
  * @param data command data
  * @param number_of_bytes self explanatory
  * @return void
  */
 static void Command_19(uint8_t *data)
 {
-    // TODO later
+    // Motor selection: first byte is packed with which motors to start (Bits 0:5 for motors 0-5)
+    uint8_t first_byte = data[0];
+
+    // Parse each bit to see what motors to start
+    bool start_m0 = first_byte & 0x04; // 0000 0100
+    bool start_m1 = first_byte & 0x08; // 0000 1000
+    bool start_m2 = first_byte & 0x10; // 0001 0000
+    bool start_m3 = first_byte & 0x20; // 0010 0000
+    bool start_m4 = first_byte & 0x40; // 0100 0000
+    bool start_m5 = first_byte & 0x80; // 1000 0000
+
+    // DIR: second byte is packed with the motor DIRs (Bits 0:5 for Motors 0-5)
+    uint8_t second_byte = data[1];
+
+    // Inits
+    uint8_t motor_dir;
+    uint16_t target_arr;
+    uint16_t target_steps;
+
+    //////////
+    // Motor 0
+    //////////
+
+    if (start_m0)
+    {
+        // Grab the motor direction
+        motor_dir = second_byte & 0x04;
+
+        // Bytes 1:2 is the target arr
+        target_arr = (data[1] << 8 | data[2]);
+
+        // Bytes 3:4 is target steps
+        target_steps = (data[3] << 8 | data[4]);
+
+        // Start motor 0
+        Motors_StartMotor(M0, motor_dir, target_arr, target_steps);
+    }
+
+    //////////
+    // Motor 1
+    //////////
+
+    if (start_m1)
+    {
+        // Grab the motor direction
+        motor_dir = second_byte & 0x08;
+
+        // Bytes 5:6 is the target arr
+        target_arr = (data[5] << 8 | data[6]);
+
+        // Bytes 7:8 is target steps
+        target_steps = (data[7] << 8 | data[8]);
+
+        // Start motor 1
+        Motors_StartMotor(M1, motor_dir, target_arr, target_steps);
+    }
+
+    //////////
+    // Motor 2
+    //////////
+
+    if (start_m2)
+    {
+        // Grab the motor direction
+        motor_dir = second_byte & 0x10;
+
+        // Bytes 9:10 is the target arr
+        target_arr = (data[9] << 8 | data[10]);
+
+        // Bytes 11:12 is target steps
+        target_steps = (data[11] << 8 | data[12]);
+
+        // Start motor 2
+        Motors_StartMotor(M2, motor_dir, target_arr, target_steps);
+    }
+
+    //////////
+    // Motor 3
+    //////////
+
+    if (start_m3)
+    {
+        // Grab the motor direction
+        motor_dir = first_byte & 0x20;
+
+        // Bytes 13:14 is the target arr
+        target_arr = (data[13] << 8 | data[14]);
+
+        // Bytes 15:16 is target steps
+        target_steps = (data[15] << 8 | data[16]);
+
+        // Start motor 3
+        Motors_StartMotor(M3, motor_dir, target_arr, target_steps);
+    }
+
+    //////////
+    // Motor 4
+    //////////
+
+    if (start_m4)
+    {
+        // Grab the motor direction
+        motor_dir = first_byte & 0x40;
+
+        // Bytes 17:18 is the target arr
+        target_arr = (data[17] << 8 | data[18]);
+
+        // Bytes 19:20 is target steps
+        target_steps = (data[19] << 8 | data[20]);
+
+        // Start motor 4
+        Motors_StartMotor(M4, motor_dir, target_arr, target_steps);
+    }
+
+    //////////
+    // Motor 5
+    //////////
+
+    if (start_m5)
+    {
+        // Grab the motor direction
+        motor_dir = first_byte & 0x80;
+
+        // Bytes 21:22 is the target arr
+        target_arr = (data[21] << 8 | data[22]);
+
+        // Bytes 23:24 is target steps
+        target_steps = (data[23] << 8 | data[24]);
+
+        // Start motor 5
+        Motors_StartMotor(M5, motor_dir, target_arr, target_steps);
+    }
 }
